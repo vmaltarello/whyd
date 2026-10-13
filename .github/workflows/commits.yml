@@ -1,0 +1,32 @@
+name: commits
+
+on:
+  pull_request:
+
+jobs:
+  conventional:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # the whole history, to list the commits of the pull request
+      - name: commit messages follow Conventional Commits
+        env:
+          BASE: origin/${{ github.base_ref }}
+        run: |
+          # type(scope)!: description; the description starts lowercase and has at least $min characters
+          types='build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test'
+          min=10
+          bad=0
+          for sha in $(git rev-list --no-merges "$BASE..HEAD"); do
+            subject=$(git log -1 --format=%s "$sha")
+            desc=${subject#*: }
+            if ! grep -qE "^($types)(\([a-z0-9-]+\))?!?: [a-z]" <<<"$subject"; then
+              echo "::error::${sha:0:7} \"$subject\": write type: description, type one of ${types//|/, }, the description starting lowercase (e.g. \"fix: handle an empty journal\")"
+              bad=1
+            elif [ ${#desc} -lt $min ]; then
+              echo "::error::${sha:0:7} \"$subject\": the description is too short, at least $min characters"
+              bad=1
+            fi
+          done
+          exit $bad
