@@ -100,7 +100,6 @@ see [docs/RULES.md](docs/RULES.md).
 ## Documentation
 
 - [Rules](docs/RULES.md): the rule format and the built-in rules
-- [Roadmap](docs/ROADMAP.md): what's next
 - [Contributing](CONTRIBUTING.md): building, testing, sending changes
 
 ## License
