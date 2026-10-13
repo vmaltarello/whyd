@@ -44,8 +44,9 @@ func levelStyle(s rules.Severity) lipgloss.Style {
 		return stYellowB
 	case rules.Noise:
 		return stGray
+	default: // rules.Info
+		return stPlain
 	}
-	return stPlain
 }
 
 func endStyle(k analyze.EndKind) lipgloss.Style {

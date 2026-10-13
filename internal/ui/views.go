@@ -24,13 +24,11 @@ func (m *model) viewKey(k string) tea.Cmd {
 		return nil
 	}
 	if isList(m.view) {
-		if m.view == vTail && !m.searching {
-			if cmd, ok := m.tailKeys(k); ok {
-				return cmd
-			}
+		if m.view == vTail && !m.searching && m.tailKeys(k) {
+			return nil
 		}
-		if cmd, ok := m.listKey(k); ok {
-			return cmd
+		if m.listKey(k) {
+			return nil
 		}
 		if k == "left" || k == "q" || k == "Q" {
 			m.view = vMain
@@ -78,7 +76,7 @@ func saveNew(base, ext, text string) (string, error) {
 		if i > 1 {
 			name = fmt.Sprintf("%s-%d%s", base, i, ext)
 		}
-		f, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		f, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 		if errors.Is(err, fs.ErrExist) {
 			continue
 		}
@@ -93,7 +91,7 @@ func saveNew(base, ext, text string) (string, error) {
 	}
 }
 
-func (m *model) tailKeys(k string) (tea.Cmd, bool) {
+func (m *model) tailKeys(k string) bool {
 	windows := []time.Duration{5 * time.Minute, 15 * time.Minute, 30 * time.Minute, time.Hour}
 	i := 0
 	for i < len(windows)-1 && windows[i] < m.window {
@@ -114,9 +112,9 @@ func (m *model) tailKeys(k string) (tea.Cmd, bool) {
 	case "n", "N":
 		m.showRoutine = !m.showRoutine
 	default:
-		return nil, false
+		return false
 	}
-	return nil, true
+	return true
 }
 
 // fullScreen frames lines over the whole screen, scrolled by m.off, with a key bar.

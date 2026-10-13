@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -199,6 +200,9 @@ func fieldValue(v json.RawMessage) string {
 	if json.Unmarshal(v, &nums) == nil {
 		b = make([]byte, len(nums))
 		for i, n := range nums {
+			if n < 0 || n > math.MaxUint8 {
+				return "" // not bytes: not a value journalctl writes
+			}
 			b[i] = byte(n)
 		}
 		return strings.ToValidUTF8(string(b), "�")

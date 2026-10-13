@@ -300,20 +300,19 @@ func (m *model) axis(r *analyze.Result, w int) []string {
 	for c := range below {
 		below[c] = " "
 	}
-	put := func(x int, s string, st lipgloss.Style) bool {
+	put := func(x int, s string, st lipgloss.Style) { // where it fits and the cells are free
 		n := len([]rune(s))
 		if x < 0 || x+n > w {
-			return false
+			return
 		}
 		for i := x; i < x+n; i++ {
 			if below[i] != " " {
-				return false
+				return
 			}
 		}
 		for i, ch := range []rune(s) {
 			below[x+i] = st.Render(string(ch))
 		}
-		return true
 	}
 	put(0, from.Format("15:04"), stDim)
 	endLabel := to.Format("15:04")

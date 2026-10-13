@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -28,7 +27,7 @@ func (m *model) openList(v view, atEnd bool) {
 }
 
 // listKey handles the keys every list view shares; it reports whether it used the key.
-func (m *model) listKey(k string) (tea.Cmd, bool) {
+func (m *model) listKey(k string) bool {
 	if m.searching {
 		switch k {
 		case "enter":
@@ -47,7 +46,7 @@ func (m *model) listKey(k string) (tea.Cmd, bool) {
 			}
 		}
 		m.sel, m.off = 0, 0
-		return nil, true
+		return true
 	}
 	switch k {
 	case "/":
@@ -55,7 +54,7 @@ func (m *model) listKey(k string) (tea.Cmd, bool) {
 	case "esc":
 		if m.search != "" {
 			m.search, m.sel, m.off = "", 0, 0
-			return nil, true
+			return true
 		}
 		m.view = vMain
 	case "up", "k":
@@ -71,9 +70,9 @@ func (m *model) listKey(k string) (tea.Cmd, bool) {
 	case "end", "G":
 		m.sel = 1 << 20
 	default:
-		return nil, false
+		return false
 	}
-	return nil, true
+	return true
 }
 
 // listView draws items full screen: the selected one in reverse video and expanded to its whole

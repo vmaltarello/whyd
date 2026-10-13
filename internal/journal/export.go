@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -23,9 +24,9 @@ func ReadExport(r io.Reader, fn func(Entry) error) error {
 	n := 0
 	for {
 		line, err := br.ReadSlice('\n')
-		if err == bufio.ErrBufferFull { // a very long plain line
+		if errors.Is(err, bufio.ErrBufferFull) { // a very long plain line
 			long := append([]byte(nil), line...)
-			for err == bufio.ErrBufferFull {
+			for errors.Is(err, bufio.ErrBufferFull) {
 				line, err = br.ReadSlice('\n')
 				long = append(long, line...)
 			}
