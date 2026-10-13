@@ -49,8 +49,10 @@ func ReadBoot(ctx context.Context, b Boot, sel *Selection, fn func(Entry) error)
 	}
 	cut := b.Last.Add(-sel.Recent)
 	// before the cut: the selected lines (same field: or; "+" between fields: or), then all after
-	args := []string{"-b", b.ID, fields, "--until", stamp(cut.Add(-time.Microsecond)),
-		"PRIORITY=0", "PRIORITY=1", "PRIORITY=2", "PRIORITY=3", "PRIORITY=4"}
+	args := []string{
+		"-b", b.ID, fields, "--until", stamp(cut.Add(-time.Microsecond)),
+		"PRIORITY=0", "PRIORITY=1", "PRIORITY=2", "PRIORITY=3", "PRIORITY=4",
+	}
 	byField := map[string][]string{}
 	var order []string
 	for _, m := range sel.Matches {

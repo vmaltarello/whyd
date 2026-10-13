@@ -64,8 +64,10 @@ func testRules(paths []string) error {
 			if err != nil {
 				return err
 			}
-			sources = append(sources, rules.Source{Name: filepath.Dir(p),
-				FS: fstest.MapFS{filepath.Base(p): {Data: data}}})
+			sources = append(sources, rules.Source{
+				Name: filepath.Dir(p),
+				FS:   fstest.MapFS{filepath.Base(p): {Data: data}},
+			})
 		}
 	}
 	set, err := rules.Load(sources...)

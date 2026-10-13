@@ -13,9 +13,9 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - run: test -z "$(gofmt -l .)"
       - run: go vet ./...
       - run: go test ./...
+      # lint and format check (gofumpt, goimports), configured in .golangci.yml
       - uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.11.3
+          version: v2.14.0

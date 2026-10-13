@@ -1,0 +1,36 @@
+version: "2"
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - errorlint # errors compared or type-asserted without errors.Is / errors.As
+    - exhaustive # switches on enums (EndKind, Severity…) that miss a value
+    - gocritic # common style and correctness mistakes
+    - gosec # security
+    - misspell
+    - modernize # newer Go idioms: range over int, slices.Backward, strings.SplitSeq…
+    - nilerr # returning nil after checking an error
+    - unparam # parameters and results that are always the same
+  settings:
+    exhaustive:
+      default-signifies-exhaustive: true # a default case covers the missing values
+      ignore-enum-types: ^regexp/syntax\.Op$ # literalsIn handles only the ops it can use
+    gosec:
+      excludes:
+        - G204 # subprocesses: journalctl, wl-copy, xclip with fixed names, no shell
+        - G304 # opening files from a variable: the path comes from the user (--file, rules test)
+  exclusions:
+    presets:
+      - std-error-handling # unchecked Close, Fprintf on stdout and the like
+    rules:
+      - path: _test\.go
+        linters: [gosec, unparam]
+
+formatters:
+  enable:
+    - gofumpt # gofmt, stricter
+    - goimports # imports grouped: standard library, others, this module
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/vmaltarello/whyd

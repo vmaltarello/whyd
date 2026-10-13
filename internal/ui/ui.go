@@ -104,9 +104,11 @@ type model struct {
 }
 
 func newModel(res *analyze.Result, src Source) *model {
-	m := &model{src: src, results: map[int]bootState{res.Boot.Index: {res: res}},
+	m := &model{
+		src: src, results: map[int]bootState{res.Boot.Index: {res: res}},
 		summaries: map[int]sumState{res.Boot.Index: {sum: res.Summarize()}}, used: []int{res.Boot.Index},
-		reading: map[int]bool{}, want: new(atomic.Int64), window: analyze.TailWindow, redacted: true}
+		reading: map[int]bool{}, want: new(atomic.Int64), window: analyze.TailWindow, redacted: true,
+	}
 	m.want.Store(int64(res.Boot.Index))
 	m.since = src.Since
 	if m.since.IsZero() {
