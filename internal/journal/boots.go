@@ -59,7 +59,7 @@ var bootRow = regexp.MustCompile(`^\s*(-?\d+)\s+([0-9a-f]{32})\s`)
 // parseBootTable reads the index and ID of each boot from the --list-boots table.
 func parseBootTable(out []byte) []Boot {
 	var boots []Boot
-	for _, line := range strings.Split(string(out), "\n") {
+	for line := range strings.SplitSeq(string(out), "\n") {
 		if m := bootRow.FindStringSubmatch(line); m != nil {
 			idx, _ := strconv.Atoi(m[1])
 			boots = append(boots, Boot{Index: idx, ID: m[2]})

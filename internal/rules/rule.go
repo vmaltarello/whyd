@@ -404,8 +404,8 @@ func checkKeys(rule map[string]any) error {
 var ruleFields = func() map[string]bool {
 	out := map[string]bool{}
 	t := reflect.TypeFor[Rule]()
-	for i := range t.NumField() {
-		if tag := t.Field(i).Tag.Get("toml"); tag != "" {
+	for field := range t.Fields() {
+		if tag := field.Tag.Get("toml"); tag != "" {
 			out[tag] = true
 		}
 	}

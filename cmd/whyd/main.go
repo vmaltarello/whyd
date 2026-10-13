@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"runtime"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -243,16 +244,16 @@ func (s *session) saveCache() {
 
 // cacheKey is what the cached summaries depend on: whyd itself and the rules.
 func cacheKey(set *rules.Set) string {
-	key := version + " " + set.Hash
+	key := []string{version, set.Hash}
 	if info, ok := debug.ReadBuildInfo(); ok && version == "dev" { // a development build: its version and commit
-		key += " " + info.Main.Version // go install …@latest: a pseudo-version, no commit
+		key = append(key, info.Main.Version) // go install …@latest: a pseudo-version, no commit
 		for _, kv := range info.Settings {
 			if kv.Key == "vcs.revision" || kv.Key == "vcs.time" {
-				key += " " + kv.Value
+				key = append(key, kv.Value)
 			}
 		}
 	}
-	return key
+	return strings.Join(key, " ")
 }
 
 // analyseFile runs the analysis of a recorded journal.
@@ -321,8 +322,8 @@ func runList(ctx context.Context, onlyUnclean bool, since time.Time) error {
 	sums := s.summaries(ctx)
 	s.saveCache()
 	unclean := 0
-	for i := len(s.boots) - 1; i >= 0; i-- { // newest first
-		b, r := s.boots[i], sums[i]
+	for i, b := range slices.Backward(s.boots) { // newest first
+		r := sums[i]
 		if r.err != nil {
 			fmt.Printf("%4d  %s  error: %v\n", b.Index, b.First.Format("Mon 2 Jan 15:04"), r.err)
 			continue

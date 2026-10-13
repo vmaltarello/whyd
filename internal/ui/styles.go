@@ -103,7 +103,7 @@ func frame(lines []string, w, h int, title string, focused bool) []string {
 // wrap breaks plain text into lines of at most w cells.
 func wrap(s string, w int) []string {
 	var out []string
-	for _, para := range strings.Split(strings.TrimSpace(s), "\n") {
+	for para := range strings.SplitSeq(strings.TrimSpace(s), "\n") {
 		out = append(out, strings.Split(ansi.Wordwrap(para, w, ""), "\n")...)
 	}
 	return out

@@ -135,8 +135,8 @@ func newModel(res *analyze.Result, src Source) *model {
 // loadOrder lists the sessions that ended since m.since, newest first, and counts the others.
 func (m *model) loadOrder() {
 	m.order, m.older = nil, 0
-	for i := len(m.src.Boots) - 1; i >= 0; i-- {
-		if b := m.src.Boots[i]; b.Last.Before(m.since) {
+	for _, b := range slices.Backward(m.src.Boots) {
+		if b.Last.Before(m.since) {
 			m.older++
 		} else {
 			m.order = append(m.order, b.Index)

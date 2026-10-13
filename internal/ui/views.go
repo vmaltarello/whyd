@@ -239,7 +239,7 @@ func (m *model) reportText() string {
 
 func (m *model) reportView() string {
 	var lines []string
-	for _, l := range strings.Split(strings.TrimRight(m.reportText(), "\n"), "\n") {
+	for l := range strings.SplitSeq(strings.TrimRight(m.reportText(), "\n"), "\n") {
 		switch {
 		case strings.HasPrefix(l, "#"):
 			lines = append(lines, stBold.Render(l))

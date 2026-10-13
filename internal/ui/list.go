@@ -158,7 +158,7 @@ func expand(it item, w int) []string {
 		if part == "" {
 			continue
 		}
-		for _, l := range strings.Split(ansi.Wrap(part, w-ind, ""), "\n") {
+		for l := range strings.SplitSeq(ansi.Wrap(part, w-ind, ""), "\n") {
 			out = append(out, pad+strings.TrimLeft(l, " "))
 		}
 	}
