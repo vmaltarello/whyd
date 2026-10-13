@@ -2,85 +2,66 @@
 
 [[rule]]
 id           = "memory.oom-report"
-kind         = "group"
-category     = "memory"
-severity     = "critical"
-title        = "out of memory, {process} killed"
+level        = "err"
 source       = "kernel"
-start        = '(?P<trigger>\S+) invoked oom-killer'
-end          = 'Out of memory: Killed process (?P<pid>\d+) \((?P<process>[^)]+)\)'
+text         = "{trigger} invoked oom-killer"
+until        = "Out of memory: Killed process {pid:num} ({process})"
 max_lines    = 5000
-merge        = "rule"
-merge_window = "10m"
+title        = "out of memory, {process} killed"
 merge_title  = "out of memory, {count} processes killed"
-explain = """
+merge_window = "10m"
+explain      = """
 The kernel ran out of RAM and swap and killed a process to free memory. If the processes
 themselves used little memory, look at shared and GPU memory in the report: on integrated
 GPUs, graphics memory is system RAM.
 """
-
-[[rule.example]]
-match = "NetworkManager invoked oom-killer: gfp_mask=0x140cca(GFP_HIGHUSER_MOVABLE|__GFP_COMP), order=0, oom_score_adj=0"
-[[rule.example]]
-nomatch = "Out of memory: Killed process 56703 (Web Content)"
+match        = ["NetworkManager invoked oom-killer: gfp_mask=0x140cca(GFP_HIGHUSER_MOVABLE|__GFP_COMP), order=0, oom_score_adj=0"]
+nomatch      = ["Out of memory: Killed process 56703 (Web Content)"]
 
 # The kill line alone, when the full report wasn't logged.
 [[rule]]
 id           = "memory.oom-kill"
-kind         = "match"
-category     = "memory"
-severity     = "critical"
-title        = "out of memory, {process} killed"
+level        = "err"
 source       = "kernel"
-message      = 'Out of memory: Killed process (?P<pid>\d+) \((?P<process>[^)]+)\)'
-merge        = "rule"
-merge_window = "10m"
+text         = "Out of memory: Killed process {pid:num} ({process})"
+title        = "out of memory, {process} killed"
 merge_title  = "out of memory, {count} processes killed"
-explain = """
+merge_window = "10m"
+explain      = """
 The kernel ran out of RAM and swap and killed a process to survive.
 """
-
-[[rule.example]]
-match = "Out of memory: Killed process 49257 (Isolated Web Co) total-vm:3527084kB, anon-rss:209888kB"
+match        = ["Out of memory: Killed process 49257 (Isolated Web Co) total-vm:3527084kB, anon-rss:209888kB"]
 
 [[rule]]
-id       = "memory.oomd-kill"
-kind     = "match"
-category = "memory"
-severity = "critical"
-title    = "systemd-oomd killed {cgroup}"
-source   = "systemd-oomd"
-message  = 'Killed (?P<cgroup>\S+) due to (?P<reason>.+)'
+id      = "memory.oomd-kill"
+level   = "err"
+source  = "systemd-oomd"
+text    = "Killed {cgroup} due to {reason}"
+title   = "systemd-oomd killed {cgroup}"
 explain = """
 systemd-oomd killed a whole group of processes because memory pressure stayed too high
 for too long. It acts before the kernel runs out of memory completely.
 """
-
-[[rule.example]]
-match = "Killed /user.slice/user-1000.slice/user@1000.service/app.slice/app-firefox.scope due to memory pressure for /user.slice being 63.24% > 50.00% for > 20s with reclaim activity"
+match   = ["Killed /user.slice/user-1000.slice/user@1000.service/app.slice/app-firefox.scope due to memory pressure for /user.slice being 63.24% > 50.00% for > 20s with reclaim activity"]
 
 # The kernel reports allocations it couldn't satisfy (failure) or that took very long (stall),
 # each with a stack trace and a memory summary, ending at "pages hwpoisoned".
 [[rule]]
 id           = "memory.alloc-trouble"
-kind         = "group"
-category     = "memory"
-severity     = "warning"
-title        = "{process}: page allocation {what}"
+level        = "warn"
 source       = "kernel"
-start        = '(?P<process>\S+): page allocation (?P<what>failure|stall for \d+ secs)'
-end          = 'pages hwpoisoned'
+text         = "{process}: page allocation {what}: order:"
+until        = "pages hwpoisoned"
 max_lines    = 250
-merge        = "rule"
-merge_window = "10m"
+title        = "{process}: page allocation {what}"
 merge_title  = "memory allocations failing or stalling"
-explain = """
+merge_window = "10m"
+explain      = """
 The kernel could not find free memory for an allocation (failure) or needed a long time to
 find it (stall). Under memory pressure this comes before or together with an out-of-memory
 kill.
 """
-
-[[rule.example]]
-match = "ProcessHangMon: page allocation failure: order:0, mode:0x140cca(GFP_HIGHUSER_MOVABLE|__GFP_COMP), nodemask=(null)"
-[[rule.example]]
-match = "tokio-runtime-w: page allocation stall for 10 secs: order:0, mode:0x140cca(GFP_HIGHUSER_MOVABLE|__GFP_COMP)"
+match        = [
+  "ProcessHangMon: page allocation failure: order:0, mode:0x140cca(GFP_HIGHUSER_MOVABLE|__GFP_COMP), nodemask=(null)",
+  "tokio-runtime-w: page allocation stall for 10 secs: order:0, mode:0x140cca(GFP_HIGHUSER_MOVABLE|__GFP_COMP)",
+]

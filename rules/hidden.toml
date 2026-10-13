@@ -1,0 +1,38 @@
+# Lines hidden and only counted.
+
+[[rule]]
+id      = "hidden.firewall"
+level   = "hidden"
+source  = "kernel"
+# a packet logged by netfilter, whatever the prefix: ufw, firewalld, nftables, iptables
+text    = "IN={_} OUT={_} SRC="
+title   = "firewall log lines"
+match   = [
+  "[UFW BLOCK] IN=wlan0 OUT= MAC=02:1a:2b:3c:4d:5e SRC=192.168.50.254 DST=192.168.50.94 LEN=468",
+  "filter_IN_public_REJECT: IN=wlp1s0 OUT= MAC=02:1a:2b:3c:4d:5e SRC=192.0.2.10 DST=192.0.2.20 LEN=60 PROTO=TCP",
+]
+nomatch = ["wlan0: Limiting TX power to 23 dBm"]
+
+[[rule]]
+id     = "hidden.rtw88-push"
+level  = "hidden"
+source = "kernel"
+text   = "rtw88_{_} {_}: failed to pusk skb"
+title  = "rtw88 push errors"
+match  = ["rtw88_8822ce 0000:01:00.0: failed to pusk skb, ret -28"]
+
+[[rule]]
+id     = "hidden.wireless-ext"
+level  = "hidden"
+source = "kernel"
+text   = "uses wireless extensions which will stop working"
+title  = "wireless extensions warnings"
+match  = ["warning: `Socket Thread' uses wireless extensions which will stop working for Wi-Fi 7 hardware; use nl80211"]
+
+[[rule]]
+id     = "hidden.wpa-multicast"
+level  = "hidden"
+source = "wpa_supplicant"
+text   = "multicast RX registrations are not supported"
+title  = "wpa_supplicant multicast notices"
+match  = ["wlp1s0: nl80211: kernel reports: multicast RX registrations are not supported"]

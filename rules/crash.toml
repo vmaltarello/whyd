@@ -1,54 +1,36 @@
 # Programs that crashed.
 
 [[rule]]
-id       = "crash.coredump"
-kind     = "match"
-category = "crash"
-severity = "warning"
-title    = "{process} killed by SIG{signal}"
-note     = "coredumpctl info {pid} shows where it crashed"
-source   = "systemd-coredump"
-message  = '^Process (?P<pid>\d+) \((?P<process>[^)]+)\) of user (?P<uid>\d+) terminated abnormally with signal (?P<signum>\d+)/(?P<signal>\w+)'
+id      = "crash.coredump"
+level   = "warn"
+source  = "systemd-coredump"
+text    = "Process {pid:num} ({process}) of user {uid:num} terminated abnormally with signal {signum:num}/{signal}, processing"
+title   = "{process} killed by SIG{signal}"
+note    = "coredumpctl info {pid} shows where it crashed"
 explain = """
 The program was killed by a signal it did not handle: SEGV is an invalid memory access, ABRT
 means the program aborted itself, TRAP is a trace or breakpoint trap. A crashed program does
 not stop the system by itself; if it was the compositor, the desktop session ends with it.
 `coredumpctl info <pid>` shows the stack trace if the core dump was kept.
 """
-
-[[rule.example]]
-match = "Process 55026 (sunshine) of user 1000 terminated abnormally with signal 5/TRAP, processing..."
-[[rule.example]]
-nomatch = "Process 19956 (awww-daemon) of user 1000 dumped core."
+match   = ["Process 55026 (sunshine) of user 1000 terminated abnormally with signal 5/TRAP, processing..."]
+nomatch = ["Process 19956 (awww-daemon) of user 1000 dumped core."]
 
 # The other lines systemd-coredump writes for the same crash: kept out of the problems list.
 [[rule]]
-id            = "crash.coredump-detail"
-kind          = "match"
-category      = "crash"
-severity      = "info"
-title         = "core dump details"
-source        = "systemd-coredump"
-message       = '^(?:Process \d+ \(.+\) of user \d+ dumped core\.|\s*$)'
-timeline_only = true
-explain = """
-The core dump and stack trace of a crash reported just before.
-"""
-
-[[rule.example]]
-match = "Process 19956 (awww-daemon) of user 1000 dumped core."
+id     = "crash.coredump-detail"
+level  = "context"
+source = "systemd-coredump"
+text   = "Process {_} ({_}) of user {_} dumped core."
+match  = ["Process 19956 (awww-daemon) of user 1000 dumped core."]
 
 [[rule]]
-id       = "crash.coredump-lost"
-kind     = "match"
-category = "crash"
-severity = "info"
-title    = "a core dump could not be saved"
-source   = "systemd-coredump"
-message  = 'Failed to send coredump datagram'
+id      = "crash.coredump-lost"
+level   = "info"
+source  = "systemd-coredump"
+text    = "Failed to send coredump datagram"
+title   = "a core dump could not be saved"
 explain = """
 systemd-coredump could not hand over a crash dump, so that crash has no saved core.
 """
-
-[[rule.example]]
-match = "Failed to send coredump datagram: Broken pipe"
+match   = ["Failed to send coredump datagram: Broken pipe"]

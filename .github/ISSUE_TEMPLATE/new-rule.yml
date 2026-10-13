@@ -1,6 +1,6 @@
 name: A message whyd should recognise
 description: A line from your journal that whyd lists as not recognised, or shows with the wrong level or explanation.
-labels: [enhancement]
+labels: [enhancement, rules]
 body:
   - type: markdown
     attributes:
@@ -38,8 +38,9 @@ body:
       options:
         - err (it can explain a crash or a freeze by itself)
         - warn (worth a look)
-        - info (context, or a known harmless message)
-        - noise (harmless and so frequent it should be hidden)
+        - info (a known harmless message, worth knowing)
+        - context (not a problem, but it tells what happened around one)
+        - hidden (harmless and so frequent it should only be counted)
         - I don't know
     validations:
       required: true

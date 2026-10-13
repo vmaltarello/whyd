@@ -26,7 +26,7 @@ buried under thousands of lines of routine noise. whyd finds it:
 - **how it ended**: clean power-off or reboot, hard power-off, died asleep, kernel panic
 - **what went wrong before**: out-of-memory kills, GPU errors, crashes, failed services,
   hung tasks, overheating, disk errors, each with a short explanation
-- **the last minutes** of the session, with the noise folded away
+- **the last minutes** of the session, with the hidden lines folded away
 - **a report** to paste on a forum, with addresses, hostname, user and Wi-Fi names removed
 
 Works on any Linux distribution with systemd.
@@ -93,7 +93,7 @@ problem's journal lines. `L` shows the last minutes, `R` the report, `?` every k
 ## Rules
 
 Problems are recognised by rules written in TOML, not code. Your own go in
-`~/.config/whyd/rules/` and can add to or replace the built-in ones. Found a problem whyd
+`~/.config/whyd/rules/` and can add to, change or turn off the built-in ones. Found a problem whyd
 didn't recognise? A rule with a real example line is the best contribution:
 see [docs/RULES.md](docs/RULES.md).
 

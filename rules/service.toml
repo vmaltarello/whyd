@@ -2,89 +2,55 @@
 
 # systemd's own line about a crashed main process: crash.coredump reports the crash itself.
 [[rule]]
-id            = "service.dumped"
-kind          = "match"
-category      = "service"
-severity      = "info"
-title         = "{unit} main process crashed"
-source        = "systemd"
-message       = '^(?P<unit>\S+): Main process exited, code=dumped'
-timeline_only = true
-explain = """
-The service's main process crashed (see the crash at the same time).
-"""
-
-[[rule.example]]
-match = "hyprpolkitagent.service: Main process exited, code=dumped, status=11/SEGV"
+id     = "service.dumped"
+level  = "context"
+source = "systemd"
+text   = "{unit}: Main process exited, code=dumped"
+match  = ["hyprpolkitagent.service: Main process exited, code=dumped, status=11/SEGV"]
 
 # A unit whose program crashed: crash.coredump already reports the crash itself.
 [[rule]]
-id            = "service.core-dump"
-kind          = "match"
-category      = "service"
-severity      = "info"
-title         = "{unit} stopped, its program crashed"
-source        = "systemd"
-message       = "^(?P<unit>\\S+): Failed with result 'core-dump'"
-timeline_only = true
-explain = """
-The service's program crashed (see the crash finding at the same time).
-"""
-
-[[rule.example]]
-match = "app-dev.lizardbyte.app.Sunshine.service: Failed with result 'core-dump'."
+id     = "service.core-dump"
+level  = "context"
+source = "systemd"
+text   = "{unit}: Failed with result 'core-dump'"
+match  = ["app-dev.lizardbyte.app.Sunshine.service: Failed with result 'core-dump'."]
 
 [[rule]]
-id       = "service.failed"
-kind     = "match"
-category = "service"
-severity = "warning"
-title    = "{unit} failed: {result}"
-note     = "systemctl status {unit} shows its last lines"
-source   = "systemd"
-message  = "^(?P<unit>\\S+): Failed with result '(?P<result>[^']+)'"
+id      = "service.failed"
+level   = "warn"
+source  = "systemd"
+text    = "{unit}: Failed with result '{result}'"
+title   = "{unit} failed: {result}"
+note    = "systemctl status {unit} shows its last lines"
 explain = """
 A systemd unit stopped with an error. 'core-dump' means its program crashed, 'exit-code'
 that it exited with an error, 'start-limit-hit' that it kept failing and systemd gave up.
 `systemctl status <unit>` (add --user for user units) shows the last lines it logged.
 """
-
-[[rule.example]]
-match = "docker.service: Failed with result 'exit-code'."
-[[rule.example]]
-nomatch = "app-dev.lizardbyte.app.Sunshine.service: Main process exited, code=dumped, status=5/TRAP"
-
+match   = ["docker.service: Failed with result 'exit-code'."]
+nomatch = ["app-dev.lizardbyte.app.Sunshine.service: Main process exited, code=dumped, status=5/TRAP"]
 
 # systemd's descriptive line for a unit that failed: service.failed reports the failure itself.
 [[rule]]
-id            = "service.start-failed"
-kind          = "match"
-category      = "service"
-severity      = "info"
-title         = "{what} failed to start"
-source        = "systemd"
-message       = '^Failed to start (?P<what>.+?)\.?$'
-timeline_only = true
-explain = """
-The description of a unit that failed to start (see its failure at the same time).
-"""
-
-[[rule.example]]
-match = "Failed to start Docker Application Container Engine."
+id     = "service.start-failed"
+level  = "context"
+source = "systemd"
+text   = "Failed to start "
+match  = ["Failed to start Docker Application Container Engine."]
 
 # Last, so specific rules win: anything refused for lack of permission.
 [[rule]]
 id       = "access.denied"
-kind     = "match"
-category = "access"
-severity = "warning"
+level    = "warn"
+priority = "warning"
+text     = [
+  "permission denied",
+  "Permission denied",
+]
 title    = "{source}: permission denied"
-priority = "<=4"
-message  = '(?i)permission denied'
-explain = """
+explain  = """
 A program tried to read or write something it is not allowed to. The message names the file
 or resource; check its owner and permissions, and the user the program runs as.
 """
-
-[[rule.example]]
-match = "wp-state: failed to create directory /.local/state/wireplumber: Permission denied"
+match    = ["wp-state: failed to create directory /.local/state/wireplumber: Permission denied"]

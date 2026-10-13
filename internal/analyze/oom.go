@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/vmaltarello/whyd/internal/rules"
 )
@@ -44,8 +45,12 @@ var (
 // the task list counts memory in pages; the size of this machine's is the best guess for a file
 var pageKB = int64(os.Getpagesize() / 1024)
 
-// parseOOM reads the first report of an OOM event (its lines up to the first kill).
+// parseOOM reads the first out-of-memory report of an event (its lines up to the first kill),
+// whatever rule took them: nil when the event doesn't hold one.
 func parseOOM(ev *rules.Event) *OOMReport {
+	if len(ev.Entries) == 0 || !strings.Contains(ev.Entries[0].Message, " invoked oom-killer") {
+		return nil
+	}
 	r := &OOMReport{GPUKB: -1}
 	num := func(re *regexp.Regexp, s string) (int64, bool) {
 		m := re.FindStringSubmatch(s)
@@ -96,6 +101,9 @@ func parseOOM(ev *rules.Event) *OOMReport {
 	})
 	if len(r.Top) > 5 {
 		r.Top = r.Top[:5]
+	}
+	if r.AnonKB == 0 && len(r.Top) == 0 { // the first line alone: no report to read
+		return nil
 	}
 	return r
 }

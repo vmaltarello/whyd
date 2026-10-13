@@ -48,7 +48,7 @@ usage:
   --days N     how far back whyd list and the interface go at first (default 30)
   --all        every session in the journal
 
-Rules: built in, plus any *.toml in ~/.config/whyd/rules/ (same id = replace).
+Rules: built in, plus any *.toml in ~/.config/whyd/rules/ (yours first; same id: changes it).
 A broken user rule is skipped with a message, it never stops whyd.
 `
 

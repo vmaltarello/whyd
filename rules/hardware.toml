@@ -1,102 +1,86 @@
 # Disks, temperature.
 
 [[rule]]
-id       = "disk.ext4-error"
-kind     = "match"
-category = "disk"
-severity = "critical"
-title    = "ext4 error on {device}"
-source   = "kernel"
-message  = 'EXT4-fs error \(device (?P<device>[^)]+)\)'
+id      = "disk.ext4-error"
+level   = "err"
+source  = "kernel"
+text    = "EXT4-fs error (device {device})"
+title   = "ext4 error on {device}"
 explain = """
 The ext4 filesystem found an inconsistency. Check the filesystem with fsck while it is not
 mounted, and the disk's health with `smartctl -a`.
 """
-
-[[rule.example]]
-match = "EXT4-fs error (device nvme0n1p2): ext4_lookup:1855: inode #2: comm ls: deleted inode referenced: 1234"
+match   = ["EXT4-fs error (device nvme0n1p2): ext4_lookup:1855: inode #2: comm ls: deleted inode referenced: 1234"]
 
 [[rule]]
-id       = "disk.btrfs-error"
-kind     = "match"
-category = "disk"
-severity = "critical"
-title    = "btrfs error on {device}"
-source   = "kernel"
-message  = 'BTRFS (?:error|critical) \(device (?P<device>[^)]+)\)'
+id      = "disk.btrfs-error"
+level   = "err"
+source  = "kernel"
+text    = [
+  "BTRFS error (device {device})",
+  "BTRFS critical (device {device})",
+]
+title   = "btrfs error on {device}"
 explain = """
 btrfs reported an error. Checksum errors mean the data read back is not what was written,
 which can come from the disk or from memory; `btrfs device stats` and `btrfs scrub` tell you
 more.
 """
-
-[[rule.example]]
-match = "BTRFS error (device nvme0n1p2): bdev /dev/nvme0n1p2 errs: wr 0, rd 0, flush 0, corrupt 1, gen 0"
+match   = ["BTRFS error (device nvme0n1p2): bdev /dev/nvme0n1p2 errs: wr 0, rd 0, flush 0, corrupt 1, gen 0"]
 
 [[rule]]
-id       = "disk.io-error"
-kind     = "match"
-category = "disk"
-severity = "critical"
-title    = "I/O error on {device}"
-source   = "kernel"
-message  = 'I/O error, dev (?P<device>[^,\s]+), sector'
+id           = "disk.io-error"
+level        = "err"
+source       = "kernel"
+text         = "I/O error, dev {device}, sector"
+title        = "I/O error on {device}"
 merge_window = "10m"
-explain = """
+explain      = """
 Reading or writing the disk failed. Check its health with `smartctl -a` and its cable or
 slot; if it is the system disk, back up first.
 """
-
-[[rule.example]]
-match = "I/O error, dev sda, sector 123456 op 0x0:(READ) flags 0x80700 phys_seg 1 prio class 2"
+match        = ["I/O error, dev sda, sector 123456 op 0x0:(READ) flags 0x80700 phys_seg 1 prio class 2"]
 
 [[rule]]
-id       = "disk.nvme-timeout"
-kind     = "match"
-category = "disk"
-severity = "critical"
-title    = "NVMe {device} timeout, controller reset"
-source   = "kernel"
-message  = 'nvme (?P<device>nvme\d+): I/O .*timeout'
+id      = "disk.nvme-timeout"
+level   = "err"
+source  = "kernel"
+text    = "nvme {device}: I/O {_}timeout"
+title   = "NVMe {device} timeout, controller reset"
 explain = """
 The NVMe drive did not answer a command in time and the kernel reset the controller.
 Repeated timeouts point to the drive, its power management or its connection.
 """
-
-[[rule.example]]
-match = "nvme nvme0: I/O 123 QID 4 timeout, reset controller"
+match   = ["nvme nvme0: I/O 123 QID 4 timeout, reset controller"]
 
 [[rule]]
-id       = "thermal.critical"
-kind     = "match"
-category = "thermal"
-severity = "critical"
-title    = "critical temperature, emergency shutdown"
-source   = "kernel"
-message  = '[Cc]ritical temperature reached|[Tt]hermal.*shutting down'
+id      = "thermal.critical"
+level   = "err"
+source  = "kernel"
+text    = [
+  "critical temperature reached",
+  "Critical temperature reached",
+  "thermal{_}shutting down",
+  "Thermal{_}shutting down",
+]
+title   = "critical temperature, emergency shutdown"
 explain = """
 A sensor reached its critical temperature and the kernel powered the machine off to protect
 it. Look at what was running at full load and at how the machine is cooled.
 """
-
-[[rule.example]]
-match = "thermal thermal_zone0: critical temperature reached (105 C), shutting down"
+match   = ["thermal thermal_zone0: critical temperature reached (105 C), shutting down"]
 
 [[rule]]
-id       = "disk.fat-dirty"
-kind     = "match"
-category = "disk"
-severity = "info"
-title    = "{device} not unmounted cleanly (FAT)"
-source   = "kernel"
-message  = 'FAT-fs \((?P<device>[^)]+)\): Volume was not properly unmounted'
-note     = "usually the EFI partition; the mark stays until fsck.fat clears it"
+id      = "disk.fat-dirty"
+level   = "info"
+source  = "kernel"
+text    = "FAT-fs ({device}): Volume was not properly unmounted"
+title   = "{device} not unmounted cleanly (FAT)"
+note    = "usually the EFI partition; the mark stays until fsck.fat clears it"
 explain = """
 A FAT filesystem (usually the EFI system partition) was found marked as in use, because at some
 point the system stopped without unmounting it. The mark stays, and is reported at every boot,
 until fsck.fat run on the unmounted partition clears it and checks for damage. On its own it
 doesn't explain a crash.
 """
-
-[[rule.example]]
-match = "FAT-fs (nvme0n1p1): Volume was not properly unmounted. Some data may be corrupt. Please run fsck."
+match   = ["FAT-fs (nvme0n1p1): Volume was not properly unmounted. Some data may be corrupt. Please run fsck."]

@@ -27,7 +27,7 @@ type Input struct {
 // TailLine is one entry of the last minutes, with what the rules made of it.
 type TailLine struct {
 	journal.Entry
-	Noise   bool // hidden by a noise rule
+	Hidden  bool // hidden by a rule
 	Matched bool // part of an event
 }
 
@@ -39,7 +39,7 @@ type Result struct {
 	Verdict      Verdict
 	Kernel       string
 	Lines        int // lines read: with a journal.Selection, not every line of the boot
-	NoiseLines   int
+	HiddenLines  int
 	Suspends     int
 	Hibernations int
 	Asleep       time.Duration
@@ -48,10 +48,11 @@ type Result struct {
 	Host         string         // the machine's hostname, from the journal ("" if not recorded)
 	Users        []string       // people who logged in (uid 1000 and up), for the redaction of reports
 	Findings     []*rules.Event // what's worth a look, most serious first
-	Noise        []rules.NoiseCount
+	Hidden       []rules.HiddenCount
 	Tail         []TailLine    // the last TailKeep before the end (capped)
 	Quiet        time.Duration // from the last warning to the end, for unclean ends
 	OOM          *OOMReport    // details of the first out-of-memory report, if any
+	ooms         map[*rules.Event]*OOMReport
 
 	// warnings and errors no rule recognised, grouped by message: nothing disappears silently
 	Unknown              []UnknownGroup
@@ -85,9 +86,8 @@ var sessionUser = regexp.MustCompile(`session opened for user ([^\s(]+)\(uid=(\d
 // QuietRule is the synthetic rule behind the "quiet before the end" finding.
 var QuietRule = &rules.Rule{
 	ID:       "whyd.quiet-end",
-	Kind:     "match",
 	Category: "end",
-	Severity: rules.Info,
+	Level:    rules.Info,
 	Explain: "No warnings or errors in the last minutes, only routine lines: the system didn't " +
 		"crash, it stopped. Typical of a frozen desktop or GPU (the kernel keeps logging while the " +
 		"screen doesn't move) or of a power cut.",
@@ -108,8 +108,10 @@ func Run(in Input) (*Result, error) {
 			first = e.Time
 		}
 		res.Lines++
-		noise, matched := eng.Feed(e)
-		if !noise && !matched && e.Priority >= 0 && e.Priority <= 4 {
+		hidden, matched := eng.Feed(e)
+		// a warning or error no rule took; an empty one says nothing a rule could explain (a
+		// message too long for a JSON recording made without --all reads as empty)
+		if !hidden && !matched && e.Priority >= 0 && e.Priority <= 4 && strings.TrimSpace(e.Message) != "" {
 			if e.Priority <= 3 {
 				res.UnknownErr++
 			} else {
@@ -125,8 +127,8 @@ func Run(in Input) (*Result, error) {
 				unknown[key] = &UnknownGroup{e.Source, line1, e.Priority, 1, e.Time, e.Time}
 			}
 		}
-		if noise {
-			res.NoiseLines++
+		if hidden {
+			res.HiddenLines++
 		} else if e.Priority >= 0 && e.Priority <= 4 {
 			lastWarn = e.Time
 		}
@@ -144,7 +146,7 @@ func Run(in Input) (*Result, error) {
 				res.Kernel = f[2]
 			}
 		}
-		ring.add(TailLine{e, noise, matched})
+		ring.add(TailLine{e, hidden, matched})
 		return nil
 	})
 	if err != nil {
@@ -163,7 +165,7 @@ func Run(in Input) (*Result, error) {
 		res.Boot.Last = end
 	}
 
-	res.Events, res.Noise = eng.Finish()
+	res.Events, res.Hidden = eng.Finish()
 	res.Suspends, res.Hibernations, res.Asleep, res.Sleeps = st.suspends, st.hibernations, st.asleep, st.sleeps
 	if st.sleeping {
 		res.Sleeps = append(res.Sleeps, Interval{st.sleepStart, end, st.hibernate})
@@ -186,9 +188,12 @@ func Run(in Input) (*Result, error) {
 
 	// groups are recorded when they close, and merged events keep their first time
 	slices.SortStableFunc(res.Events, func(a, b *rules.Event) int { return a.First.Compare(b.First) })
-	for _, ev := range res.Events {
-		if ev.Rule.ID == "memory.oom-report" && res.OOM == nil {
-			res.OOM = parseOOM(ev)
+	for _, ev := range res.Events { // every out-of-memory report, whatever rule took it
+		if o := parseOOM(ev); o != nil {
+			if res.OOM == nil {
+				res.OOM, res.ooms = o, map[*rules.Event]*OOMReport{}
+			}
+			res.ooms[ev] = o
 		}
 	}
 	res.Findings = findings(res.Events)
@@ -232,17 +237,17 @@ func Needs(set *rules.Set) *journal.Selection {
 	return sel
 }
 
-// findings keeps what a person should look at: everything but noise and timeline-only context
+// findings keeps what a person should look at: everything but hidden lines and context
 // (suspend/resume markers, duplicates of another finding).
 func findings(events []*rules.Event) []*rules.Event {
 	var out []*rules.Event
 	for _, ev := range events {
-		if ev.Rule.Severity > rules.Noise && !ev.Rule.Timeline {
+		if ev.Rule.Level >= rules.Info {
 			out = append(out, ev)
 		}
 	}
 	slices.SortStableFunc(out, func(a, b *rules.Event) int {
-		if c := cmp.Compare(b.Rule.Severity, a.Rule.Severity); c != 0 {
+		if c := cmp.Compare(b.Rule.Level, a.Rule.Level); c != 0 {
 			return c
 		}
 		return a.First.Compare(b.First)
@@ -253,7 +258,7 @@ func findings(events []*rules.Event) []*rules.Event {
 // Summary is what lists show about a session: small, and stored in the cache for ended ones.
 type Summary struct {
 	Kind   EndKind
-	Errors int       // findings with severity critical
+	Errors int       // findings of level err
 	Worst  string    // title of the most serious warning or error, "" if none
 	Last   time.Time // last entry: a cached summary is valid only for the same end
 }
@@ -263,8 +268,8 @@ func (s Summary) Bad() bool { return !s.Kind.Clean() && s.Kind != EndRunning }
 
 // Summarize returns the summary of the result.
 func (r *Result) Summarize() Summary {
-	s := Summary{Kind: r.Verdict.Kind, Errors: r.Count(rules.Critical), Last: r.Boot.Last}
-	if w := r.Worst(); w != nil && w.Rule.Severity >= rules.Warning {
+	s := Summary{Kind: r.Verdict.Kind, Errors: r.Count(rules.Err), Last: r.Boot.Last}
+	if w := r.Worst(); w != nil && w.Rule.Level >= rules.Warn {
 		s.Worst = w.Title
 	}
 	return s
@@ -278,16 +283,19 @@ func (r *Result) Worst() *rules.Event {
 	return r.Findings[0]
 }
 
-// Count returns how many findings have that severity.
-func (r *Result) Count(s rules.Severity) int {
+// Count returns how many findings have that level.
+func (r *Result) Count(l rules.Level) int {
 	n := 0
 	for _, ev := range r.Findings {
-		if ev.Rule.Severity == s {
+		if ev.Rule.Level == l {
 			n++
 		}
 	}
 	return n
 }
+
+// OOMOf returns the out-of-memory report read from this event's lines, or nil.
+func (r *Result) OOMOf(ev *rules.Event) *OOMReport { return r.ooms[ev] }
 
 // Gap is the time between the last entry and the start of the next boot (0 if unknown).
 func (r *Result) Gap() time.Duration {
@@ -332,7 +340,7 @@ func Collapse(lines []TailLine) []TailGroup {
 			if g.Source != l.Source || (i < len(out)-1 && l.Time.Sub(g.Time) > time.Second) {
 				break
 			}
-			if keys[i] == k && g.Noise == l.Noise {
+			if keys[i] == k && g.Hidden == l.Hidden {
 				g.Count++
 				merged = true
 				break

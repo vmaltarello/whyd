@@ -88,19 +88,19 @@ type model struct {
 	focus      int
 	selP, offP int // problems panel
 
-	view        view
-	shown       []item // the items of the list view on screen, after the search filter
-	tailKey     string // what tailCache was built for
-	tailCache   []item
-	openRoutine map[int]bool // folded routine blocks opened in the tail, by block number
-	off         int          // scroll of the full-screen view (first line shown)
-	sel         int          // selected item in a list view
-	search      string
-	searching   bool
-	window      time.Duration
-	showRoutine bool
-	redacted    bool
-	status      string
+	view       view
+	shown      []item // the items of the list view on screen, after the search filter
+	tailKey    string // what tailCache was built for
+	tailCache  []item
+	openHidden map[int]bool // folded blocks of hidden lines opened in the tail, by block number
+	off        int          // scroll of the full-screen view (first line shown)
+	sel        int          // selected item in a list view
+	search     string
+	searching  bool
+	window     time.Duration
+	showHidden bool
+	redacted   bool
+	status     string
 }
 
 func newModel(res *analyze.Result, src Source) *model {

@@ -61,21 +61,21 @@ func TestSelectionMatchesFullRead(t *testing.T) {
 // shown is everything whyd shows of a result, as text.
 func shown(r *Result) string {
 	s := fmt.Sprintf("%+v|%+v|%v|%d %d %v %v|%s %s %q|%d %d|%v|%+v|", r.Boot, r.Verdict, r.Quiet, r.Suspends,
-		r.Hibernations, r.Asleep, r.Sleeps, r.Kernel, r.Host, r.Users, r.UnknownErr, r.UnknownW, r.NoiseLines, r.OOM)
+		r.Hibernations, r.Asleep, r.Sleeps, r.Kernel, r.Host, r.Users, r.UnknownErr, r.UnknownW, r.HiddenLines, r.OOM)
 	for _, ev := range r.Events {
 		s += fmt.Sprintf("%s %q %d %v %v %v %d|", ev.Rule.ID, ev.Title, ev.Count, ev.First, ev.Last, ev.Fields, len(ev.Entries))
 		for _, e := range ev.Entries {
 			s += e.Message
 		}
 	}
-	for _, n := range r.Noise {
+	for _, n := range r.Hidden {
 		s += fmt.Sprintf("%s %d|", n.Rule.ID, n.Count)
 	}
 	for _, g := range r.Unknown {
 		s += fmt.Sprintf("%+v|", g)
 	}
 	for _, l := range r.Tail {
-		s += fmt.Sprintf("%v %s %v %v %s|", l.Time, l.Source, l.Noise, l.Matched, l.Message)
+		s += fmt.Sprintf("%v %s %v %v %s|", l.Time, l.Source, l.Hidden, l.Matched, l.Message)
 	}
 	return s
 }

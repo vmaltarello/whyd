@@ -30,7 +30,7 @@ const (
 type Engine struct {
 	set    *Set
 	events []*Event
-	noise  map[*Rule]int
+	hidden map[*Rule]int
 	group  *openGroup
 }
 
@@ -42,11 +42,11 @@ type openGroup struct {
 
 // NewEngine starts an empty analysis with a rule set.
 func NewEngine(s *Set) *Engine {
-	return &Engine{set: s, noise: map[*Rule]int{}}
+	return &Engine{set: s, hidden: map[*Rule]int{}}
 }
 
-// Feed processes one entry and reports whether a noise rule hid it, or another rule used it.
-func (e *Engine) Feed(en journal.Entry) (noise, matched bool) {
+// Feed processes one entry and reports whether a hidden rule took it, or another rule used it.
+func (e *Engine) Feed(en journal.Entry) (hidden, matched bool) {
 	if g := e.group; g != nil {
 		if e.feedGroup(g, en) {
 			return false, true
@@ -56,35 +56,27 @@ func (e *Engine) Feed(en journal.Entry) (noise, matched bool) {
 		if !r.applies(en.Source, en.Priority) {
 			continue
 		}
-		switch r.Kind {
-		case "noise":
-			if may(r.messageLit, en.Message) && r.message.MatchString(en.Message) {
-				e.noise[r]++
+		if r.Level == Hidden {
+			if matches(r.take, en.Message) {
+				e.hidden[r]++
 				return true, false
 			}
-		case "match":
-			if !may(r.messageLit, en.Message) {
-				continue
-			}
-			if f := fields(r.message, en.Message); f != nil {
-				f["source"] = en.Source
-				e.emit(r, f, []journal.Entry{en})
-				return false, true
-			}
-		case "group":
-			if !may(r.startLit, en.Message) {
-				continue
-			}
-			if f := fields(r.start, en.Message); f != nil {
-				f["source"] = en.Source
-				if e.group != nil { // a new group starts while another is open: close that one first
-					e.closeGroup()
-				}
-				e.group = &openGroup{rule: r, fields: f, entries: []journal.Entry{en}}
-				e.extract(e.group, en.Message)
-				return false, true
-			}
+			continue
 		}
+		f := find(r.take, en.Message)
+		if f == nil {
+			continue
+		}
+		f["source"] = en.Source
+		if len(r.until) == 0 {
+			e.emit(r, f, []journal.Entry{en})
+			return false, true
+		}
+		if e.group != nil { // a new block starts while another is open: close that one first
+			e.closeGroup()
+		}
+		e.group = &openGroup{rule: r, fields: f, entries: []journal.Entry{en}}
+		return false, true
 	}
 	return false, false
 }
@@ -93,37 +85,23 @@ func (e *Engine) Feed(en journal.Entry) (noise, matched bool) {
 // end line or when it grows too long. It returns true when the entry was consumed.
 func (e *Engine) feedGroup(g *openGroup, en journal.Entry) bool {
 	r := g.rule
-	if len(g.entries) >= r.MaxLines || en.Time.Sub(g.entries[0].Time) > time.Duration(r.MaxSeconds)*time.Second {
+	if len(g.entries) >= r.maxLines || en.Time.Sub(g.entries[0].Time) > maxBlock {
 		e.closeGroup()
 		return false
 	}
 	if r.Source != "" && en.Source != r.Source {
 		return false // an unrelated line in the middle of the group: other rules can have it
 	}
-	if may(r.startLit, en.Message) && r.start.MatchString(en.Message) { // the next occurrence starts before this one ended
+	if matches(r.take, en.Message) { // the next occurrence starts before this one ended
 		e.closeGroup()
 		return false
 	}
 	g.entries = append(g.entries, en)
-	e.extract(g, en.Message)
-	if !may(r.endLit, en.Message) {
-		return true
-	}
-	if f := fields(r.end, en.Message); f != nil {
+	if f := find(r.until, en.Message); f != nil {
 		maps.Copy(g.fields, f)
 		e.closeGroup()
 	}
 	return true
-}
-
-func (e *Engine) extract(g *openGroup, msg string) {
-	for _, re := range g.rule.extract {
-		for k, v := range fields(re, msg) {
-			if _, seen := g.fields[k]; !seen {
-				g.fields[k] = v
-			}
-		}
-	}
 }
 
 func (e *Engine) closeGroup() {
@@ -132,13 +110,13 @@ func (e *Engine) closeGroup() {
 	e.emit(g.rule, g.fields, g.entries)
 }
 
-// emit records an occurrence, merging it into the previous event of the same rule when the rule
-// says so (same title, or any occurrence with merge = "rule") and it falls inside the window.
+// emit records an occurrence, merging it into the previous event of the same rule with the same
+// title (any title, when the rule has a merge_title) if it falls inside the window.
 func (e *Engine) emit(r *Rule, f map[string]string, entries []journal.Entry) {
 	title := fill(r.Title, f)
 	first, last := entries[0].Time, entries[len(entries)-1].Time
 	for _, ev := range slices.Backward(e.events) {
-		if ev.Rule != r || (r.Merge != "rule" && ev.Title != title) {
+		if ev.Rule != r || (r.MergeTitle == "" && ev.Title != title) {
 			continue
 		}
 		if r.window > 0 && first.Sub(ev.Last) > r.window {
@@ -160,15 +138,15 @@ func (e *Engine) emit(r *Rule, f map[string]string, entries []journal.Entry) {
 	})
 }
 
-// NoiseCount is how many lines a noise rule hid.
-type NoiseCount struct {
+// HiddenCount is how many lines a hidden rule took.
+type HiddenCount struct {
 	Rule  *Rule
 	Count int
 }
 
-// Finish closes any open group and returns the events in time order, and the noise counts in
-// rule order.
-func (e *Engine) Finish() ([]*Event, []NoiseCount) {
+// Finish closes any open group and returns the events in time order, and the counts of hidden
+// lines in rule order.
+func (e *Engine) Finish() ([]*Event, []HiddenCount) {
 	if e.group != nil {
 		e.closeGroup()
 	}
@@ -179,13 +157,13 @@ func (e *Engine) Finish() ([]*Event, []NoiseCount) {
 			ev.Title = fill(ev.Rule.MergeTitle, f)
 		}
 	}
-	var noise []NoiseCount
+	var hidden []HiddenCount
 	for _, r := range e.set.Rules {
-		if n := e.noise[r]; n > 0 {
-			noise = append(noise, NoiseCount{r, n})
+		if n := e.hidden[r]; n > 0 {
+			hidden = append(hidden, HiddenCount{r, n})
 		}
 	}
-	return e.events, noise
+	return e.events, hidden
 }
 
 // Note is the rule's short note with this event's fields filled in, or "".

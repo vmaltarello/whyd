@@ -3,49 +3,55 @@
 
 [[rule]]
 id          = "firmware.boot"
-kind        = "match"
-category    = "firmware"
-severity    = "info"
+level       = "info"
+source      = "kernel"
+text        = [
+  "ACPI Error",
+  "ACPI Warning",
+  "ACPI BIOS Error",
+  "ACPI BIOS Warning",
+  "_CPC object is not present",
+  "TSC found unstable",
+  "Marking clocksource {_} unstable",
+  "clocksource: Watchdog ",
+  "clocksource: Clocksource ",
+  "TDX not supported",
+  "SMBus Timeout",
+  "i2c {_}: Failed",
+  "psp gfx command {_} failed",
+  "missing or invalid SUBNQN",
+  "AUX port disabled",
+  "WQ_NAME_LEN",
+]
 title       = "firmware or hardware setup message"
 note        = "often repeated at every boot; compare with older sessions"
-source      = "kernel"
-message     = '(?:ACPI (?:BIOS )?(?:Error|Warning)|_CPC object is not present|TSC found unstable|Marking clocksource \S+ unstable|clocksource: (?:Watchdog|Clocksource) |TDX not supported|SMBus Timeout|i2c \S+: Failed|psp gfx command .* failed|missing or invalid SUBNQN|AUX port disabled|WQ_NAME_LEN)'
-merge       = "rule"
 merge_title = "firmware and hardware setup messages"
-explain = """
+explain     = """
 Messages from the BIOS and ACPI tables, or from drivers while they set up the hardware. whyd
 groups them because they tend to repeat at every boot; compare with older sessions to see
 whether they are new.
 """
-
-[[rule.example]]
-match = "ACPI BIOS Error (bug): Could not resolve symbol [\\_SB.PCI0.GPP4.WLAN], AE_NOT_FOUND (20260408/dswload2-162)"
-[[rule.example]]
-match = "amd_pstate: the _CPC object is not present in SBIOS or ACPI disabled"
-[[rule.example]]
-match = "i2c i2c-7: SMBus Timeout!"
-[[rule.example]]
-match = "clocksource: Marking clocksource tsc-early unstable due to frequency skew"
-[[rule.example]]
-nomatch = "clocksource: Switched to clocksource hpet"
+match       = [
+  'ACPI BIOS Error (bug): Could not resolve symbol [\_SB.PCI0.GPP4.WLAN], AE_NOT_FOUND (20260408/dswload2-162)',
+  "amd_pstate: the _CPC object is not present in SBIOS or ACPI disabled",
+  "i2c i2c-7: SMBus Timeout!",
+  "clocksource: Marking clocksource tsc-early unstable due to frequency skew",
+]
+nomatch     = ["clocksource: Switched to clocksource hpet"]
 
 [[rule]]
 id          = "firmware.tpm"
-kind        = "match"
-category    = "firmware"
-severity    = "info"
+level       = "info"
+priority    = "warning"
+text        = "NvPCR"
 title       = "TPM NvPCR not available"
 note        = "a systemd TPM feature this machine doesn't support"
-message     = 'NvPCR'
-priority    = "<=4"
-merge       = "rule"
 merge_title = "TPM NvPCR not available"
-explain = """
+explain     = """
 systemd tried to record measurements in a TPM non-volatile register (NvPCR) and the TPM or
 its firmware doesn't provide it.
 """
-
-[[rule.example]]
-match = "Could not extend NvPCR: No such file or directory"
-[[rule.example]]
-match = "Failed to initialize NvPCR index: No such file or directory"
+match       = [
+  "Could not extend NvPCR: No such file or directory",
+  "Failed to initialize NvPCR index: No such file or directory",
+]

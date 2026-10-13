@@ -12,7 +12,7 @@ type item struct {
 	text   string // styled; may be wider than the screen and hold several lines (stack traces)
 	plain  string // what / searches in
 	indent int    // where continuation lines start when the item is expanded
-	block  int    // in the tail: the routine block this item opens or closes, 0 if none
+	block  int    // in the tail: the block of hidden lines this item opens or closes, 0 if none
 }
 
 func isList(v view) bool { return v == vLines || v == vTail || v == vUnknown }
@@ -20,7 +20,7 @@ func isList(v view) bool { return v == vLines || v == vTail || v == vUnknown }
 // openList switches to a list view, selecting the first item, or the last one (the tail).
 func (m *model) openList(v view, atEnd bool) {
 	m.view, m.sel, m.off, m.search, m.searching = v, 0, 0, "", false
-	m.openRoutine = map[int]bool{}
+	m.openHidden = map[int]bool{}
 	if atEnd {
 		m.sel = 1 << 20
 	}

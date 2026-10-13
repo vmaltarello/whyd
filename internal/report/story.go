@@ -95,7 +95,8 @@ func QuietLine(r *analyze.Result) string {
 	return "nothing abnormal logged after " + r.Boot.Last.Add(-r.Quiet).Format("15:04")
 }
 
-// Before names what most likely led to the end, tersely: "10:53 out of memory, sunshine SIGTRAP".
+// Before names what most likely led to the end: "10:53 out of memory, 4 processes killed; sunshine
+// killed by SIGTRAP".
 // Errors count whatever their time; warnings only within beforeWindow of the end, because a
 // warning hours earlier (often one logged at every boot) explains nothing. At most two, one per
 // category, in time order. Empty for a clean shutdown: there is nothing to explain.
@@ -106,12 +107,12 @@ func Before(r *analyze.Result) string {
 	var cands []*rules.Event
 	for _, ev := range r.Findings {
 		recent := r.Boot.Last.Sub(ev.Last) <= beforeWindow
-		if ev.Rule.Severity == rules.Critical || ev.Rule.Severity == rules.Warning && recent {
+		if ev.Rule.Level == rules.Err || ev.Rule.Level == rules.Warn && recent {
 			cands = append(cands, ev)
 		}
 	}
 	slices.SortStableFunc(cands, func(a, b *rules.Event) int {
-		return cmp.Or(cmp.Compare(b.Rule.Severity, a.Rule.Severity), b.Last.Compare(a.Last))
+		return cmp.Or(cmp.Compare(b.Rule.Level, a.Rule.Level), b.Last.Compare(a.Last))
 	})
 	var serious []*rules.Event
 	seen := map[string]bool{} // one per category: allocation stalls add nothing to an OOM
@@ -126,25 +127,12 @@ func Before(r *analyze.Result) string {
 	last := ""
 	for _, ev := range serious {
 		at := ev.First.Format("15:04")
-		p := Short(ev)
+		p := ev.Title
 		if at != last {
 			p = at + " " + p
 		}
 		last = at
 		parts = append(parts, p)
 	}
-	return strings.Join(parts, ", ")
-}
-
-// Short is a finding in two or three words: "out of memory", "sunshine SIGTRAP".
-func Short(ev *rules.Event) string {
-	switch ev.Rule.ID {
-	case "memory.oom-report", "memory.oom-kill":
-		return "out of memory"
-	case "crash.coredump":
-		return ev.Fields["process"] + " SIG" + ev.Fields["signal"]
-	case "service.failed":
-		return ev.Fields["unit"] + " failed"
-	}
-	return ev.Title
+	return strings.Join(parts, "; ") // titles can hold commas
 }

@@ -101,16 +101,16 @@ func (m *model) tailKeys(k string) bool {
 	case "enter":
 		if m.sel < len(m.shown) && m.shown[m.sel].block > 0 {
 			b := m.shown[m.sel].block
-			m.openRoutine[b] = !m.openRoutine[b]
+			m.openHidden[b] = !m.openHidden[b]
 		}
 	case "+", "=":
-		m.openRoutine = map[int]bool{}
+		m.openHidden = map[int]bool{}
 		m.window, m.sel = windows[min(i+1, len(windows)-1)], 1<<20
 	case "-":
-		m.openRoutine = map[int]bool{}
+		m.openHidden = map[int]bool{}
 		m.window, m.sel = windows[max(i-1, 0)], 1<<20
 	case "n", "N":
-		m.showRoutine = !m.showRoutine
+		m.showHidden = !m.showHidden
 	default:
 		return false
 	}
@@ -145,17 +145,17 @@ func (m *model) linesView() string {
 func (m *model) tailView() string {
 	res, _ := m.cur()
 	title := fmt.Sprintf("Last %s of the %s, before %s", analyze.Duration(m.window), report.SessionName(res), report.When(res.Boot.Last))
-	routine := "Show all routine"
-	if m.showRoutine {
-		routine = "Hide routine"
+	hidden := "Show hidden"
+	if m.showHidden {
+		hidden = "Fold hidden"
 	}
-	return m.listView(title, "", m.tailItems(res), [][2]string{{"Enter", "Open block"}, {"+-", "Window"}, {"N", routine}, {"Esc", "Back"}})
+	return m.listView(title, "", m.tailItems(res), [][2]string{{"Enter", "Open block"}, {"+-", "Window"}, {"N", hidden}, {"Esc", "Back"}})
 }
 
 // tailItems builds the lines of the tail view, once for each session, window and folding: the
 // last hour can hold thousands of lines, too many to style again at every key.
 func (m *model) tailItems(res *analyze.Result) []item {
-	key := fmt.Sprintf("%p %v %v %v", res, m.window, m.showRoutine, m.openRoutine)
+	key := fmt.Sprintf("%p %v %v %v", res, m.window, m.showHidden, m.openHidden)
 	if key == m.tailKey {
 		return m.tailCache
 	}
@@ -171,10 +171,10 @@ func (m *model) tailItems(res *analyze.Result) []item {
 		for _, g := range hiddenLines {
 			n += g.Count
 		}
-		open := m.openRoutine[block]
-		t := fmt.Sprintf("%13s… %s, Enter to show", "", report.Plural(n, "routine line"))
+		open := m.openHidden[block]
+		t := fmt.Sprintf("%13s… %s, Enter to show", "", report.Plural(n, "hidden line"))
 		if open {
-			t = fmt.Sprintf("%13s… %s, Enter to fold", "", report.Plural(n, "routine line"))
+			t = fmt.Sprintf("%13s… %s, Enter to fold", "", report.Plural(n, "hidden line"))
 		}
 		items = append(items, item{stGray.Render(t), t, 0, block})
 		if open {
@@ -185,13 +185,13 @@ func (m *model) tailItems(res *analyze.Result) []item {
 		hiddenLines = nil
 	}
 	for _, g := range analyze.Collapse(res.TailSince(m.window)) {
-		if g.Noise && !m.showRoutine {
+		if g.Hidden && !m.showHidden {
 			hiddenLines = append(hiddenLines, g)
 			continue
 		}
 		flush()
 		st := stPlain
-		if g.Noise {
+		if g.Hidden {
 			st = stGray
 		}
 		items = append(items, m.tailItem(g, st))
@@ -315,15 +315,15 @@ func (m *model) unknownView() string {
 	res, _ := m.cur()
 	var items []item
 	for _, g := range res.Unknown {
-		level, st := "warn", stYellowB
+		prio, st := "warning", stYellowB // the priority the program logged it with
 		if g.Priority <= 3 {
-			level, st = "err", stRedB
+			prio, st = "err", stRedB
 		}
-		head := st.Render(pad(level, 7)) + stDim.Render(pad(fmt.Sprint(g.Count), 7)) + pad(report.Within(g.First, res.Boot.Last), 11) +
+		head := st.Render(pad(prio, 10)) + stDim.Render(pad(fmt.Sprint(g.Count), 7)) + pad(report.Within(g.First, res.Boot.Last), 11) +
 			stCyan.Render(pad(g.Source, 15)) + " "
-		items = append(items, item{head + g.Message, level + " " + g.Source + " " + g.Message, 41, 0})
+		items = append(items, item{head + g.Message, prio + " " + g.Source + " " + g.Message, 44, 0})
 	}
-	header := pad("LEVEL", 7) + pad("TIMES", 7) + pad("FIRST", 11) + pad("SOURCE", 16) + "MESSAGE"
+	header := pad("PRIORITY", 10) + pad("TIMES", 7) + pad("FIRST", 11) + pad("SOURCE", 16) + "MESSAGE"
 	title := fmt.Sprintf("Not recognised: %d errors, %d warnings, %d messages", res.UnknownErr, res.UnknownW, len(res.Unknown))
 	return m.listView(title, header, items, [][2]string{{"Esc", "Back"}})
 }

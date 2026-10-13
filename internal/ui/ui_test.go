@@ -205,7 +205,7 @@ func TestReviewDetails(t *testing.T) {
 		}
 	}
 
-	// a folded block of routine lines opens and closes with Enter
+	// a folded block of hidden lines opens and closes with Enter
 	press(m, "l", "home")
 	m.View()
 	for i, it := range m.shown {
@@ -218,7 +218,7 @@ func TestReviewDetails(t *testing.T) {
 	press(m, "enter")
 	m.View()
 	if len(m.shown) <= before {
-		t.Error("Enter on a routine block should show its lines")
+		t.Error("Enter on a block of hidden lines should show its lines")
 	}
 	press(m, "enter")
 	m.View()

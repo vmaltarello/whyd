@@ -2,68 +2,51 @@
 
 [[rule]]
 id       = "auth.failed"
-kind     = "match"
-category = "auth"
-severity = "warning"
+level    = "warn"
+priority = "warning"
+text     = "pam_unix({service}:{_}): auth could not identify password for [{user}]"
 title    = "{service}: authentication failed"
-priority = "<=4"
-message  = 'pam_unix\((?P<service>[^:)]+)[^)]*\): auth could not identify password for \[(?P<user>[^\]]+)\]'
 note     = "a wrong or cancelled password; check the user name too"
-explain = """
+explain  = """
 A password was asked and not accepted, or the prompt was cancelled. Repeated failures for a
 user you don't know can mean someone tried to log in; for your own user it is usually a typo
 or a cancelled prompt.
 """
-
-[[rule.example]]
-match = "pam_unix(sudo:auth): auth could not identify password for [user]"
-[[rule.example]]
-match = "pam_unix(greetd:auth): auth could not identify password for [alex]"
+match    = [
+  "pam_unix(sudo:auth): auth could not identify password for [user]",
+  "pam_unix(greetd:auth): auth could not identify password for [alex]",
+]
 
 [[rule]]
-id       = "auth.wrong-password"
-kind     = "match"
-category = "auth"
-severity = "warning"
-title    = "sudo: {n} incorrect password attempts"
-source   = "sudo"
-message  = '(?P<n>\d+) incorrect password attempts?'
+id      = "auth.wrong-password"
+level   = "warn"
+source  = "sudo"
+text    = "{n:num} incorrect password attempt"
+title   = "sudo: {n} incorrect password attempts"
 explain = """
 sudo was given a wrong password, as many times as the message says.
 """
-
-[[rule.example]]
-match = "user : 3 incorrect password attempts ; TTY=pts/1 ; PWD=/home/user ; USER=root ; COMMAND=/usr/bin/pacman"
+match   = ["user : 3 incorrect password attempts ; TTY=pts/1 ; PWD=/home/user ; USER=root ; COMMAND=/usr/bin/pacman"]
 
 [[rule]]
-id       = "auth.no-password"
-kind     = "match"
-category = "auth"
-severity = "info"
-title    = "sudo refused: a password is required"
-source   = "sudo"
-message  = 'a password is required'
-note     = "a script or tool ran sudo without a terminal to ask the password"
+id      = "auth.no-password"
+level   = "info"
+source  = "sudo"
+text    = "a password is required"
+title   = "sudo refused: a password is required"
+note    = "a script or tool ran sudo without a terminal to ask the password"
 explain = """
 A command was run with sudo where no password could be asked (for example sudo -n, or from a
 script without a terminal), so sudo refused it.
 """
-
-[[rule.example]]
-match = "user : a password is required ; PWD=/home/user ; USER=root ; COMMAND=/usr/bin/true"
+match   = ["user : a password is required ; PWD=/home/user ; USER=root ; COMMAND=/usr/bin/true"]
 
 # The PAM conversation lines that come with a failed or cancelled prompt.
 [[rule]]
-id            = "auth.conversation"
-kind          = "match"
-category      = "auth"
-severity      = "info"
-title         = "{source}: password prompt ended"
-message       = '^pam_\w+\([^)]*\): (?:conversation failed|Error sending audit message)'
-timeline_only = true
-explain = """
-The password prompt ended without an answer, as part of a failed or cancelled login.
-"""
-
-[[rule.example]]
-match = "pam_unix(sudo:auth): conversation failed"
+id    = "auth.conversation"
+level = "context"
+text  = [
+  "pam_{_}({_}): conversation failed",
+  "pam_{_}({_}): Error sending audit message",
+]
+match = ["pam_unix(sudo:auth): conversation failed"]

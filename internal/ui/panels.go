@@ -277,11 +277,11 @@ func (m *model) axis(r *analyze.Result, w int) []string {
 	}
 	marked := make([]bool, w)
 	for _, ev := range r.Findings {
-		if ev.Rule.Severity < rules.Warning {
+		if ev.Rule.Level < rules.Warn {
 			continue
 		}
 		c := col(ev.First)
-		st := levelStyle(ev.Rule.Severity)
+		st := levelStyle(ev.Rule.Level)
 		if c > 0 && c < w-1 && !marked[c] { // findings come most serious first: keep its colour
 			cells[c] = st.Render("┼")
 			marked[c] = true
@@ -377,12 +377,9 @@ func problemsTitle(r *analyze.Result) string {
 		return "Problems"
 	}
 	var parts []string
-	for _, l := range []struct {
-		s    rules.Severity
-		name string
-	}{{rules.Critical, "err"}, {rules.Warning, "warn"}, {rules.Info, "info"}} {
-		if n := r.Count(l.s); n > 0 {
-			parts = append(parts, fmt.Sprintf("%d %s", n, l.name))
+	for _, l := range []rules.Level{rules.Err, rules.Warn, rules.Info} {
+		if n := r.Count(l); n > 0 {
+			parts = append(parts, fmt.Sprintf("%d %s", n, l))
 		}
 	}
 	return "Problems: " + strings.Join(parts, ", ")
@@ -392,7 +389,7 @@ func problemsTitle(r *analyze.Result) string {
 // its title doesn't fit, so every title can be read in full.
 func (m *model) problemRows(r *analyze.Result, ev *rules.Event, sel bool, w int) []string {
 	when := pad(report.Within(ev.First, r.Boot.Last), 11)
-	level := pad(report.Level(ev.Rule.Severity), 7)
+	level := pad(ev.Rule.Level.String(), 7)
 	count := fmt.Sprint(ev.Count)
 	const lead = 18 // when + level
 	room := w - lead - 6
@@ -412,10 +409,10 @@ func (m *model) problemRows(r *analyze.Result, ev *rules.Event, sel bool, w int)
 			out = append(out, stSel.Render(spread(left, right, w)))
 		case sel:
 			out = append(out, stSelBlur.Render(spread(left, right, w)))
-		case ev.Rule.Severity <= rules.Info: // notes: present, but quieter than problems
+		case ev.Rule.Level <= rules.Info: // notes: present, but quieter than problems
 			out = append(out, stDim.Render(spread(left, right, w)))
 		default:
-			out = append(out, spread(when+levelStyle(ev.Rule.Severity).Render(level)+t, stDim.Render(right), w))
+			out = append(out, spread(when+levelStyle(ev.Rule.Level).Render(level)+t, stDim.Render(right), w))
 		}
 	}
 	return out
@@ -428,19 +425,16 @@ func (m *model) problemDetail(r *analyze.Result, ev *rules.Event, w, h int) []st
 	fact := func(label, value string) {
 		out = append(out, stDim.Render(pad(label, 9))+fit(value, w-9))
 	}
-	switch {
-	case (ev.Rule.ID == "memory.oom-report" || ev.Rule.ID == "memory.oom-kill") && r.OOM != nil:
-		fact("killed", killedList(r.OOM))
-		fact("memory", report.MemoryLine(r.OOM))
+	if o := r.OOMOf(ev); o != nil {
+		fact("killed", killedList(o))
+		fact("memory", report.MemoryLine(o))
 		var top []string
-		for _, p := range r.OOM.Top[:min(4, len(r.OOM.Top))] {
+		for _, p := range o.Top[:min(4, len(o.Top))] {
 			top = append(top, p.Name+" "+report.Size(p.RSSKB))
 		}
 		fact("largest", strings.Join(top, ", "))
-	default:
-		if d := report.Detail(r, ev); d != "" {
-			out = append(out, fit(d, w))
-		}
+	} else if d := report.Detail(r, ev); d != "" {
+		out = append(out, fit(d, w))
 	}
 	if ev.Rule.Explain != "" && h-len(out) > 1 {
 		if len(out) > 0 {
@@ -498,7 +492,7 @@ func sentencesThatFit(text string, w, h int) []string {
 	return wrap(best, w)
 }
 
-// bottomLine says what the problems list doesn't show: lines no rule recognised, routine lines.
+// bottomLine says what the problems list doesn't show: lines no rule recognised, hidden lines.
 func bottomLine(r *analyze.Result) string {
 	var parts []string
 	if n := r.UnknownErr + r.UnknownW; n > 0 {
@@ -508,8 +502,8 @@ func bottomLine(r *analyze.Result) string {
 		}
 		parts = append(parts, stDim.Render(s)+stGray.Render(", press W"))
 	}
-	if r.NoiseLines > 0 {
-		parts = append(parts, stGray.Render(fmt.Sprintf("%d routine hidden", r.NoiseLines)))
+	if r.HiddenLines > 0 {
+		parts = append(parts, stGray.Render(fmt.Sprintf("%d hidden", r.HiddenLines)))
 	}
 	return strings.Join(parts, stGray.Render("   "))
 }

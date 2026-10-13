@@ -1,100 +1,81 @@
 # The kernel itself in trouble.
 
 [[rule]]
-id       = "kernel.panic"
-kind     = "match"
-category = "kernel"
-severity = "critical"
-title    = "kernel panic: {reason}"
-source   = "kernel"
-message  = 'Kernel panic - not syncing: (?P<reason>.+)'
+id      = "kernel.panic"
+level   = "err"
+source  = "kernel"
+text    = "Kernel panic - not syncing: {reason}"
+title   = "kernel panic: {reason}"
 explain = """
 The kernel hit an error it could not recover from and stopped. A panic rarely reaches the
 journal, because the disk isn't written anymore; when it does, this is the cause.
 """
-
-[[rule.example]]
-match = "Kernel panic - not syncing: Fatal exception in interrupt"
+match   = ["Kernel panic - not syncing: Fatal exception in interrupt"]
 
 [[rule]]
-id       = "kernel.hung-task"
-kind     = "match"
-category = "kernel"
-severity = "critical"
-title    = "{process} blocked for over {secs}s"
-source   = "kernel"
-message  = 'INFO: task (?P<process>.+):(?P<pid>\d+) blocked for more than (?P<secs>\d+) seconds'
+id      = "kernel.hung-task"
+level   = "err"
+source  = "kernel"
+text    = "INFO: task {process}:{pid:num} blocked for more than {secs:num} seconds"
+title   = "{process} blocked for over {secs}s"
 explain = """
 A task waited in the kernel for minutes, often on storage or a driver. The kernel logs a
 stack trace right after this message that shows where it was waiting.
 """
-
-[[rule.example]]
-match = "INFO: task kworker/u16:2:123 blocked for more than 122 seconds."
+match   = ["INFO: task kworker/u16:2:123 blocked for more than 122 seconds."]
 
 [[rule]]
-id       = "kernel.soft-lockup"
-kind     = "match"
-category = "kernel"
-severity = "critical"
-title    = "CPU {cpu} soft lockup ({secs}s)"
-source   = "kernel"
-message  = 'soft lockup - CPU#(?P<cpu>\d+) stuck for (?P<secs>\d+)s'
+id      = "kernel.soft-lockup"
+level   = "err"
+source  = "kernel"
+text    = "soft lockup - CPU#{cpu:num} stuck for {secs:num}s"
+title   = "CPU {cpu} soft lockup ({secs}s)"
 explain = """
 A CPU ran kernel code for a long time without letting anything else run, and the system is
 unresponsive while it lasts. The stack trace logged after it shows where the CPU was stuck.
 """
-
-[[rule.example]]
-match = "watchdog: BUG: soft lockup - CPU#3 stuck for 22s! [kworker/3:1:1234]"
+match   = ["watchdog: BUG: soft lockup - CPU#3 stuck for 22s! [kworker/3:1:1234]"]
 
 [[rule]]
-id       = "kernel.hard-lockup"
-kind     = "match"
-category = "kernel"
-severity = "critical"
-title    = "CPU {cpu} hard lockup"
-source   = "kernel"
-message  = 'Watchdog detected hard LOCKUP on cpu (?P<cpu>\d+)'
+id      = "kernel.hard-lockup"
+level   = "err"
+source  = "kernel"
+text    = "Watchdog detected hard LOCKUP on cpu {cpu:num}"
+title   = "CPU {cpu} hard lockup"
 explain = """
 A CPU stopped responding even to interrupts. This points to hardware, firmware or a low-
 level driver, and the system usually freezes completely.
 """
-
-[[rule.example]]
-match = "NMI watchdog: Watchdog detected hard LOCKUP on cpu 2"
+match   = ["NMI watchdog: Watchdog detected hard LOCKUP on cpu 2"]
 
 [[rule]]
-id       = "kernel.bug"
-kind     = "match"
-category = "kernel"
-severity = "warning"
-title    = "kernel bug: {what}"
-source   = "kernel"
-message  = '^(?:BUG: |kernel BUG at |Oops: )(?P<what>.+)'
+id      = "kernel.bug"
+level   = "warn"
+source  = "kernel"
+text    = [
+  "BUG: {what}",
+  "kernel BUG at {what}",
+  "Oops: {what}",
+]
+title   = "kernel bug: {what}"
 explain = """
 The kernel detected an internal error. It may keep running, but the subsystem involved can
 be left in a broken state.
 """
-
-[[rule.example]]
-match = "BUG: kernel NULL pointer dereference, address: 0000000000000008"
-[[rule.example]]
-match = "Oops: general protection fault, probably for non-canonical address 0xdead000000000100: 0000 [#1] PREEMPT SMP NOPTI"
+match   = [
+  "BUG: kernel NULL pointer dereference, address: 0000000000000008",
+  "Oops: general protection fault, probably for non-canonical address 0xdead000000000100: 0000 [#1] PREEMPT SMP NOPTI",
+]
 
 [[rule]]
-id       = "kernel.watchdog-running"
-kind     = "match"
-category = "kernel"
-severity = "info"
-title    = "{dev} still running when closed"
-source   = "kernel"
-message  = 'watchdog: (?P<dev>watchdog\d+): watchdog did not stop!'
-note     = "usually logged at shutdown"
+id      = "kernel.watchdog-running"
+level   = "info"
+source  = "kernel"
+text    = "watchdog: {dev}: watchdog did not stop!"
+title   = "{dev} still running when closed"
+note    = "usually logged at shutdown"
 explain = """
 The hardware watchdog device was closed while its timer was still running. If this is not
 during shutdown, the machine may reset when the timer expires.
 """
-
-[[rule.example]]
-match = "watchdog: watchdog0: watchdog did not stop!"
+match   = ["watchdog: watchdog0: watchdog did not stop!"]

@@ -43,7 +43,7 @@ func Text(w io.Writer, r *analyze.Result) error {
 		p("%-*s %-6s %-52s %s\n", tw, "TIME", "LEVEL", "WHAT", "TIMES")
 		for _, ev := range r.Findings {
 			what := ev.Title
-			p("%-*s %-6s %s%s%d\n", tw, WhenShort(ev.First), Level(ev.Rule.Severity), what,
+			p("%-*s %-6s %s%s%d\n", tw, WhenShort(ev.First), ev.Rule.Level, what,
 				strings.Repeat(" ", max(1, 53-utf8.RuneCountInString(what))), ev.Count)
 			if d := Detail(r, ev); d != "" {
 				p("%*s%s\n", tw+8, "", d)
@@ -54,7 +54,7 @@ func Text(w io.Writer, r *analyze.Result) error {
 	if n := r.UnknownErr + r.UnknownW; n > 0 {
 		p("unknown %d warning and error lines matched no rule (%d errors, %d messages)\n", n, r.UnknownErr, len(r.Unknown))
 	}
-	if n := NoiseSummary(r); n != "" {
+	if n := HiddenSummary(r); n != "" {
 		p("hidden  %s\n", n)
 	}
 	facts := []string{Plural(r.Suspends, "suspend")}

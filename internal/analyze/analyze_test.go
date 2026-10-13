@@ -2,12 +2,15 @@ package analyze
 
 import (
 	"fmt"
+	"maps"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/vmaltarello/whyd/internal/journal"
 	"github.com/vmaltarello/whyd/internal/rules"
+	builtin "github.com/vmaltarello/whyd/rules"
 )
 
 func run(t *testing.T, name string) *Result {
@@ -62,8 +65,8 @@ func TestFreeze(t *testing.T) {
 	if r.Quiet.Round(time.Minute) != 14*time.Minute {
 		t.Errorf("quiet %v, want ~14 min", r.Quiet)
 	}
-	if r.NoiseLines != 437+149+1 { // firewall, rtw88 push errors, one wireless-extensions warning
-		t.Errorf("noise lines %d", r.NoiseLines)
+	if r.HiddenLines != 437+149+1 { // firewall, rtw88 push errors, one wireless-extensions warning
+		t.Errorf("hidden lines %d", r.HiddenLines)
 	}
 	if len(r.Tail) == 0 || r.Tail[0].Time.Before(r.Boot.Last.Add(-TailKeep)) || len(r.TailSince(TailWindow)) >= len(r.Tail) {
 		t.Errorf("tail: %d lines", len(r.Tail))
@@ -152,6 +155,7 @@ func TestCollapse(t *testing.T) {
 
 func TestOOMTaskFormats(t *testing.T) {
 	ev := &rules.Event{Entries: []journal.Entry{
+		{Message: "firefox invoked oom-killer: gfp_mask=0x140cca(GFP_HIGHUSER_MOVABLE|__GFP_COMP), order=0"},
 		// kernel 6.1 and later
 		{Message: "[   4321]  1000  4321  1234567    51200    40000    11000      200   900000        0           100 firefox"},
 		// older kernels: no rss_anon, rss_file, rss_shmem
@@ -249,5 +253,67 @@ func TestLongOOMReport(t *testing.T) {
 	}
 	if r.OOM == nil || len(r.OOM.Killed) != 1 || r.OOM.Killed[0].Name != "firefox" {
 		t.Errorf("OOM %+v", r.OOM)
+	}
+}
+
+// Each out-of-memory problem shows the memory of its own report, whatever rule took the lines;
+// a kill without a report shows none.
+func TestOOMPerEvent(t *testing.T) {
+	user := fstest.MapFS{"mine.toml": {Data: []byte(`
+[[rule]]
+id    = "memory.oom-report"
+level = "off"
+
+[[rule]]
+id     = "mine.oom"
+level  = "err"
+source = "kernel"
+text   = "{trigger} invoked oom-killer"
+until  = "Out of memory: Killed process {pid:num} ({process})"
+title  = "oom, {process} killed"
+`)}}
+	set, err := rules.Load(rules.Source{Name: "built-in", FS: builtin.Builtin, Strict: true}, rules.Source{Name: "u", FS: user})
+	if err != nil || len(set.Problems) > 0 {
+		t.Fatal(err, set.Problems)
+	}
+	report := func(kb int, name string) []string {
+		return []string{
+			name + " invoked oom-killer: gfp_mask=0x140cca(GFP_HIGHUSER_MOVABLE|__GFP_COMP), order=0",
+			fmt.Sprintf("Node 0 active_anon:%dkB inactive_anon:0kB shmem:0kB", kb),
+			fmt.Sprintf("Out of memory: Killed process 1 (%s) total-vm:1kB", name),
+		}
+	}
+	at := time.Date(2026, 10, 9, 10, 0, 0, 0, time.Local)
+	var entries []journal.Entry
+	for i, block := range [][]string{report(1000, "first"), report(2000, "second"), {"Out of memory: Killed process 2 (lone) total-vm:1kB"}} {
+		for j, l := range block {
+			entries = append(entries, journal.Entry{Time: at.Add(time.Duration(i)*time.Hour + time.Duration(j)*time.Millisecond), Priority: 6, Source: "kernel", Kernel: true, Message: l})
+		}
+	}
+	r, err := Run(Input{Rules: set, Read: func(fn func(journal.Entry) error) error {
+		for _, e := range entries {
+			if err := fn(e); err != nil {
+				return err
+			}
+		}
+		return nil
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]int64{}
+	for _, ev := range r.Findings {
+		if o := r.OOMOf(ev); o != nil {
+			got[ev.Title] = o.AnonKB
+		} else {
+			got[ev.Title] = -1
+		}
+	}
+	want := map[string]int64{"oom, first killed": 1000, "oom, second killed": 2000, "out of memory, lone killed": -1}
+	if !maps.Equal(got, want) {
+		t.Errorf("memory per problem %v, want %v", got, want)
+	}
+	if r.OOM == nil || r.OOM.AnonKB != 1000 {
+		t.Errorf("first report %+v", r.OOM)
 	}
 }

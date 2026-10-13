@@ -61,7 +61,7 @@ func TestMarkdown(t *testing.T) {
 	out := b.String()
 	for _, want := range []string{
 		"- **end:** no shutdown, journal stops at 12:11:56; nothing abnormal logged after 11:57",
-		"- **before:** 10:53 out of memory, sunshine SIGTRAP",
+		"- **before:** 10:53 out of memory, 4 processes killed; sunshine killed by SIGTRAP",
 		"| err | out of memory, 4 processes killed (procs 6.0G, shmem 4.4G, gpu 7.5G, swap ",
 		"| warn | sunshine killed by SIGTRAP",
 		"quiet for 14m before the end",
@@ -88,7 +88,7 @@ func TestText(t *testing.T) {
 	for _, want := range []string{
 		"end     no shutdown, journal stops at 12:11:56",
 		"        nothing abnormal logged after 11:57",
-		"before  10:53 out of memory, sunshine SIGTRAP",
+		"before  10:53 out of memory, 4 processes killed; sunshine killed by SIGTRAP",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("text misses %q\n%s", want, out)
@@ -115,8 +115,8 @@ func TestWhen(t *testing.T) {
 // "before" names possible causes: errors, and warnings close to the end; nothing after a clean end.
 func TestBefore(t *testing.T) {
 	cases := map[string]string{
-		"unclean-oom":    "10:53 out of memory, sunshine SIGTRAP",
-		"unclean-quiet":  "21:42 qemu-system-x86 SIGSEGV", // the wireplumber warning at boot is left out
+		"unclean-oom":    "10:53 out of memory, 4 processes killed; sunshine killed by SIGTRAP",
+		"unclean-quiet":  "21:42 qemu-system-x86 killed by SIGSEGV", // the wireplumber warning at boot is left out
 		"clean-poweroff": "",
 	}
 	for name, want := range cases {

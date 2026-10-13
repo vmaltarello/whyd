@@ -1,108 +1,88 @@
 # Network and audio on the desktop.
 
 [[rule]]
-id          = "network.wifi-failed"
-kind        = "match"
-category    = "network"
-severity    = "warning"
-title       = "{device}: Wi-Fi connection failed"
-source      = "NetworkManager"
-message     = 'device \((?P<device>[^)]+)\): Activation: (?:failed for connection|\(wifi\) Network\.Connect failed)'
+id      = "network.wifi-failed"
+level   = "warn"
+source  = "NetworkManager"
+text    = [
+  "device ({device}): Activation: failed for connection",
+  "device ({device}): Activation: (wifi) Network.Connect failed",
+]
+title   = "{device}: Wi-Fi connection failed"
 explain = """
 NetworkManager could not connect to the wireless network. The lines just before it in the
 journal say which step failed: authentication, association or getting an address.
 """
-
-[[rule.example]]
-match = "<warn>  [1790349818.1852] device (wlp1s0): Activation: failed for connection 'HomeNet-5G'"
-[[rule.example]]
-match = "<error> [1790349818.1852] device (wlan0): Activation: (wifi) Network.Connect failed: GDBus.Error:net.connman.iwd.Failed: Operation failed"
+match   = [
+  "<warn>  [1790349818.1852] device (wlp1s0): Activation: failed for connection 'HomeNet-5G'",
+  "<error> [1790349818.1852] device (wlan0): Activation: (wifi) Network.Connect failed: GDBus.Error:net.connman.iwd.Failed: Operation failed",
+]
 
 [[rule]]
-id          = "audio.underrun"
-kind        = "match"
-category    = "audio"
-severity    = "info"
-title       = "audio underruns ({client})"
-source      = "pipewire-pulse"
-message     = '\[(?P<client>[^\]]+)\] underrun'
-note        = "possible audible gaps; not a stability problem"
+id      = "audio.underrun"
+level   = "info"
+source  = "pipewire-pulse"
+text    = "[{client}] underrun"
+title   = "audio underruns ({client})"
+note    = "possible audible gaps; not a stability problem"
 explain = """
 An application playing or recording audio through PipeWire did not keep up and the buffer
 ran empty.
 """
-
-[[rule.example]]
-match = "mod.protocol-pulse: 0x560c8778de50: [sunshine] underrun read:962252800 avail:0"
+match   = ["mod.protocol-pulse: 0x560c8778de50: [sunshine] underrun read:962252800 avail:0"]
 
 [[rule]]
-id       = "dbus.activation-failed"
-kind     = "match"
-category = "dbus"
-severity = "info"
-title    = "D-Bus service {name} could not be started"
-source   = "dbus-broker-launch"
-message  = "Activation request for '(?P<name>[^']+)' failed"
-note     = "something asked for it; it is missing or disabled"
+id      = "dbus.activation-failed"
+level   = "info"
+source  = "dbus-broker-launch"
+text    = "Activation request for '{name}' failed"
+title   = "D-Bus service {name} could not be started"
+note    = "something asked for it; it is missing or disabled"
 explain = """
 A program asked D-Bus for a service that could not be started, because it isn't installed,
 is disabled, or failed. It matters only if the program that needed it misbehaves.
 """
-
-[[rule.example]]
-match = "Activation request for 'org.freedesktop.nm_dispatcher' failed."
+match   = ["Activation request for 'org.freedesktop.nm_dispatcher' failed."]
 
 [[rule]]
 id          = "dbus.service-file"
-kind        = "match"
-category    = "dbus"
-severity    = "info"
-title       = "D-Bus service file problem"
+level       = "info"
 source      = "dbus-broker-launch"
-message     = "(?:Invalid user name|Ignoring duplicate name|is not named after the D-Bus name)"
-merge       = "rule"
-merge_title = "D-Bus service file problems"
+text        = [
+  "Invalid user name",
+  "Ignoring duplicate name",
+  "is not named after the D-Bus name",
+]
+title       = "D-Bus service file problem"
 note        = "packaging details; the services still work"
-explain = """
+merge_title = "D-Bus service file problems"
+explain     = """
 A D-Bus service file installed by a package is malformed or conflicts with another one; D-Bus
 ignores it or works around it.
 """
-
-[[rule.example]]
-match = "Ignoring duplicate name 'org.freedesktop.Notifications' in service file '/usr/share/dbus-1/services/org.knopwob.dunst.service'"
+match       = ["Ignoring duplicate name 'org.freedesktop.Notifications' in service file '/usr/share/dbus-1/services/org.knopwob.dunst.service'"]
 
 [[rule]]
 id          = "network.nm-error"
-kind        = "match"
-category    = "network"
-severity    = "warning"
-title       = "NetworkManager error"
+level       = "warn"
 source      = "NetworkManager"
-message     = '<error>'
-priority    = "<=3"
-merge       = "rule"
+priority    = "err"
+text        = "<error>"
+title       = "NetworkManager error"
 merge_title = "NetworkManager errors"
-explain = """
+explain     = """
 NetworkManager reported an error; the message, under Lines, says which device and step.
 """
-
-[[rule.example]]
-match = "<error> [1790349818.1852] device (wlp1s0): Couldn't initialize supplicant interface: Name owner lost"
+match       = ["<error> [1790349818.1852] device (wlp1s0): Couldn't initialize supplicant interface: Name owner lost"]
 
 [[rule]]
 id          = "bluetooth.error"
-kind        = "match"
-category    = "bluetooth"
-severity    = "info"
-title       = "bluetoothd error"
+level       = "info"
 source      = "bluetoothd"
-priority    = "<=3"
-message     = '.'
-merge       = "rule"
+priority    = "err"
+title       = "bluetoothd error"
 merge_title = "bluetoothd errors"
-explain = """
+explain     = """
 The Bluetooth daemon reported an internal error; the message, under Lines, names the part.
 """
-
-[[rule.example]]
-match = "src/adv_monitor.c:btd_adv_monitor_power_down() Unexpected NULL btd_adv_monitor_manager object upon power down"
+match       = ["src/adv_monitor.c:btd_adv_monitor_power_down() Unexpected NULL btd_adv_monitor_manager object upon power down"]

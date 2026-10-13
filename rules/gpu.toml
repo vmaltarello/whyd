@@ -1,80 +1,64 @@
 # Graphics drivers. A GPU that stops responding freezes the screen while the rest keeps running.
 
 [[rule]]
-id       = "gpu.amdgpu-timeout"
-kind     = "match"
-category = "gpu"
-severity = "critical"
-title    = "amdgpu ring {ring} timeout"
-source   = "kernel"
-message  = 'amdgpu.*ring (?P<ring>\S+) timeout'
+id      = "gpu.amdgpu-timeout"
+level   = "err"
+source  = "kernel"
+text    = "amdgpu{_}ring {ring} timeout"
+title   = "amdgpu ring {ring} timeout"
 explain = """
 A job on the AMD GPU did not finish in time and the driver tries to reset the GPU. The
 display stops updating until the reset completes; if the reset fails, it stays frozen.
 """
-
-[[rule.example]]
-match = "amdgpu 0000:03:00.0: amdgpu: ring gfx_0.0.0 timeout, signaled seq=1234, emitted seq=1236"
+match   = ["amdgpu 0000:03:00.0: amdgpu: ring gfx_0.0.0 timeout, signaled seq=1234, emitted seq=1236"]
 
 [[rule]]
-id       = "gpu.amdgpu-reset"
-kind     = "match"
-category = "gpu"
-severity = "critical"
-title    = "amdgpu GPU reset"
-source   = "kernel"
-message  = 'amdgpu.*GPU reset (begin|succeeded|failed)'
+id      = "gpu.amdgpu-reset"
+level   = "err"
+source  = "kernel"
+text    = [
+  "amdgpu{_}GPU reset begin",
+  "amdgpu{_}GPU reset succeeded",
+  "amdgpu{_}GPU reset failed",
+]
+title   = "amdgpu GPU reset"
 explain = """
 The AMD driver reset the GPU after it hung. If the reset failed, the display stays frozen
 until a reboot.
 """
-
-[[rule.example]]
-match = "amdgpu 0000:03:00.0: amdgpu: GPU reset begin!"
+match   = ["amdgpu 0000:03:00.0: amdgpu: GPU reset begin!"]
 
 [[rule]]
-id       = "gpu.i915-hang"
-kind     = "match"
-category = "gpu"
-severity = "critical"
-title    = "i915 GPU hang"
-source   = "kernel"
-message  = 'i915.*GPU HANG'
+id      = "gpu.i915-hang"
+level   = "err"
+source  = "kernel"
+text    = "i915{_}GPU HANG"
+title   = "i915 GPU hang"
 explain = """
 The Intel GPU stopped responding and the driver had to reset it.
 """
-
-[[rule.example]]
-match = "i915 0000:00:02.0: [drm] GPU HANG: ecode 12:1:85dffffb, in Xorg [1234]"
+match   = ["i915 0000:00:02.0: [drm] GPU HANG: ecode 12:1:85dffffb, in Xorg [1234]"]
 
 [[rule]]
-id       = "gpu.nvidia-xid"
-kind     = "match"
-category = "gpu"
-severity = "critical"
-title    = "NVIDIA Xid {xid}"
-source   = "kernel"
-message  = 'NVRM: Xid \((?P<pci>[^)]+)\): (?P<xid>\d+)'
+id      = "gpu.nvidia-xid"
+level   = "err"
+source  = "kernel"
+text    = "NVRM: Xid ({pci}): {xid:num}"
+title   = "NVIDIA Xid {xid}"
 explain = """
 The proprietary NVIDIA driver reported an error, identified by its Xid number in NVIDIA's
 documentation. Xid 79 means the GPU stopped responding on the PCI bus.
 """
-
-[[rule.example]]
-match = "NVRM: Xid (PCI:0000:01:00): 79, pid='<unknown>', name=<unknown>, GPU has fallen off the bus."
+match   = ["NVRM: Xid (PCI:0000:01:00): 79, pid='<unknown>', name=<unknown>, GPU has fallen off the bus."]
 
 [[rule]]
-id       = "gpu.amdgpu-error"
-kind     = "match"
-category = "gpu"
-severity = "warning"
-title    = "amdgpu error in {func}"
-source   = "kernel"
-message  = '\[drm:(?P<func>\w+) \[amdgpu\]\] \*ERROR\*'
+id      = "gpu.amdgpu-error"
+level   = "warn"
+source  = "kernel"
+text    = "[drm:{func} [amdgpu]] *ERROR*"
+title   = "amdgpu error in {func}"
 explain = """
 The amdgpu driver logged an error in the named function. The full message, under Lines, is
 what the driver developers need if it comes together with a freeze.
 """
-
-[[rule.example]]
-match = "[drm:amdgpu_dm_plane_helper_prepare_fb [amdgpu]] *ERROR* 00000000957b0d06 bind failed"
+match   = ["[drm:amdgpu_dm_plane_helper_prepare_fb [amdgpu]] *ERROR* 00000000957b0d06 bind failed"]

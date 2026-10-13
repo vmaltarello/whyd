@@ -13,15 +13,10 @@ import (
 // Version is printed in reports; set by main.
 var Version = "dev"
 
-// Level is the journalctl-style word for a severity: "err", "warn", "info", "noise".
-func Level(s rules.Severity) string {
-	return [...]string{"noise", "info", "warn", "err"}[s]
-}
-
-// NoiseSummary lists hidden lines per noise rule: "437 firewall log lines, 149 rtw88 push errors".
-func NoiseSummary(r *analyze.Result) string {
+// HiddenSummary lists hidden lines per rule: "437 firewall log lines, 149 rtw88 push errors".
+func HiddenSummary(r *analyze.Result) string {
 	var parts []string
-	for _, n := range r.Noise {
+	for _, n := range r.Hidden {
 		parts = append(parts, fmt.Sprintf("%d %s", n.Count, n.Rule.Title))
 	}
 	return strings.Join(parts, ", ")
@@ -29,10 +24,10 @@ func NoiseSummary(r *analyze.Result) string {
 
 // Detail is the line under a finding: the most useful facts, or the rule's note.
 func Detail(r *analyze.Result, ev *rules.Event) string {
-	switch {
-	case (ev.Rule.ID == "memory.oom-report" || ev.Rule.ID == "memory.oom-kill") && r.OOM != nil:
-		return MemoryLine(r.OOM)
-	case ev.Count > 1 && ev.Last.Sub(ev.First) > time.Minute:
+	if o := r.OOMOf(ev); o != nil {
+		return MemoryLine(o)
+	}
+	if ev.Count > 1 && ev.Last.Sub(ev.First) > time.Minute {
 		return fmt.Sprintf("from %s to %s", Within(ev.First, r.Boot.Last), Within(ev.Last, r.Boot.Last))
 	}
 	return ev.Note()
@@ -99,7 +94,7 @@ func Markdown(w io.Writer, r *analyze.Result, red *Redactor) error {
 			if d := Detail(r, ev); d != "" {
 				what += " (" + clean(d) + ")"
 			}
-			p("| %s | %s | %s | %d |\n", ev.First.Format("Mon 15:04"), Level(ev.Rule.Severity), cell(what), ev.Count)
+			p("| %s | %s | %s | %d |\n", ev.First.Format("Mon 15:04"), ev.Rule.Level, cell(what), ev.Count)
 		}
 	}
 	if r.OOM != nil && len(r.OOM.Top) > 0 {
@@ -111,22 +106,22 @@ func Markdown(w io.Writer, r *analyze.Result, red *Redactor) error {
 	}
 	if len(r.Unknown) > 0 {
 		p("\n### Not recognised\n\n%d warning and error lines matched no rule. The most serious and frequent:\n\n", r.UnknownErr+r.UnknownW)
-		p("| level | times | source | message |\n|---|---|---|---|\n")
+		p("| priority | times | source | message |\n|---|---|---|---|\n")
 		for _, g := range r.Unknown[:min(10, len(r.Unknown))] {
-			level := "warn"
+			prio := "warning"
 			if g.Priority <= 3 {
-				level = "err"
+				prio = "err"
 			}
-			p("| %s | %d | %s | %s |\n", level, g.Count, cell(clean(g.Source)), cell(clean(g.Message)))
+			p("| %s | %d | %s | %s |\n", prio, g.Count, cell(clean(g.Source)), cell(clean(g.Message)))
 		}
 	}
-	if n := NoiseSummary(r); n != "" {
-		p("\nHidden as routine: %s\n", n)
+	if n := HiddenSummary(r); n != "" {
+		p("\nHidden: %s\n", n)
 	}
 
 	var groups []analyze.TailGroup
 	for _, g := range analyze.Collapse(r.TailSince(analyze.TailWindow)) {
-		if !g.Noise {
+		if !g.Hidden {
 			groups = append(groups, g)
 		}
 	}

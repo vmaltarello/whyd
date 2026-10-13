@@ -1,125 +1,76 @@
 # Context for the timeline: not problems, but they explain the story around them.
 
+# The system went to sleep. If the journal ends while it is suspended, the machine never woke
+# up, for example because the battery ran out.
 [[rule]]
-id           = "power.suspend"
-kind         = "match"
-category     = "power"
-severity     = "info"
-title        = "suspended ({mode})"
-timeline_only = true
-source       = "kernel"
-message      = '^PM: suspend entry \((?P<mode>\w+)\)'
-merge_window = "1s"
-explain = """
-The system went to sleep. If the journal ends while it is suspended, the machine never woke
-up, for example because the battery ran out.
-"""
+id     = "power.suspend"
+level  = "context"
+source = "kernel"
+text   = "PM: suspend entry"
+match  = ["PM: suspend entry (deep)"]
 
-[[rule.example]]
-match = "PM: suspend entry (deep)"
-
+# The system woke up from sleep.
 [[rule]]
-id           = "power.resume"
-kind         = "match"
-category     = "power"
-severity     = "info"
-title        = "resumed"
-timeline_only = true
-source       = "kernel"
-message      = '^PM: suspend exit'
-merge_window = "1s"
-explain = """
-The system woke up from sleep.
-"""
+id     = "power.resume"
+level  = "context"
+source = "kernel"
+text   = "PM: suspend exit"
+match  = ["PM: suspend exit"]
 
-[[rule.example]]
-match = "PM: suspend exit"
-
+# The system saved its memory to disk and powered off. If the journal ends here, the saved state
+# was never restored.
 [[rule]]
-id           = "power.hibernate"
-kind         = "match"
-category     = "power"
-severity     = "info"
-title        = "hibernated"
-timeline_only = true
-source       = "kernel"
-message      = '^PM: hibernation: hibernation entry'
-merge_window = "1s"
-explain = """
-The system saved its memory to disk and powered off. If the journal ends here, the saved
-state was never restored.
-"""
+id     = "power.hibernate"
+level  = "context"
+source = "kernel"
+text   = "PM: hibernation: hibernation entry"
+match  = ["PM: hibernation: hibernation entry"]
 
-[[rule.example]]
-match = "PM: hibernation: hibernation entry"
-
+# The system was restored from hibernation.
 [[rule]]
-id           = "power.thaw"
-kind         = "match"
-category     = "power"
-severity     = "info"
-title        = "resumed from hibernation"
-timeline_only = true
-source       = "kernel"
-message      = '^PM: hibernation: hibernation exit'
-merge_window = "1s"
-explain = """
-The system was restored from hibernation.
-"""
-
-[[rule.example]]
-match = "PM: hibernation: hibernation exit"
-
+id     = "power.thaw"
+level  = "context"
+source = "kernel"
 # Known noisy driver warnings: shown once, counted, explained.
+text   = "PM: hibernation: hibernation exit"
+match  = ["PM: hibernation: hibernation exit"]
 
 [[rule]]
-id       = "known.rtw88-tx"
-kind     = "match"
-category = "known"
-severity = "info"
-title    = "{driver} TX errors, known issue"
-note     = "common with this driver; matters if Wi-Fi drops at the same time"
-source   = "kernel"
-message  = '(?P<driver>rtw88_\w+) \S+: failed to write TX skb to HCI'
+id      = "known.rtw88-tx"
+level   = "info"
+source  = "kernel"
+text    = "{driver} {_}: failed to write TX skb to HCI"
+title   = "{driver} TX errors, known issue"
+note    = "common with this driver; matters if Wi-Fi drops at the same time"
 explain = """
 The rtw88 Wi-Fi driver could not hand a packet to the chip. Bursts of this message are
 common with this driver and the connection usually recovers; it matters if Wi-Fi drops at
 the same times.
 """
-
-[[rule.example]]
-match = "rtw88_8822ce 0000:01:00.0: failed to write TX skb to HCI"
+match   = ["rtw88_8822ce 0000:01:00.0: failed to write TX skb to HCI"]
 
 [[rule]]
-id       = "known.portal-gtk"
-kind     = "match"
-category = "known"
-severity = "info"
-title    = "portal-gtk failed at login, harmless"
-note     = "started again when an application needs it"
-source   = "systemd"
-message  = "^xdg-desktop-portal-gtk\\.service: Failed with result"
+id      = "known.portal-gtk"
+level   = "info"
+source  = "systemd"
+text    = "xdg-desktop-portal-gtk.service: Failed with result"
+title   = "portal-gtk failed at login, harmless"
+note    = "started again when an application needs it"
 explain = """
 xdg-desktop-portal-gtk exited with an error during login. Portals are started on demand
 through D-Bus, so it is started again when an application needs it.
 """
-
-[[rule.example]]
-match = "xdg-desktop-portal-gtk.service: Failed with result 'exit-code'."
+match   = ["xdg-desktop-portal-gtk.service: Failed with result 'exit-code'."]
 
 [[rule]]
-id       = "known.rtw88-dpk"
-kind     = "match"
-category = "known"
-severity = "info"
-title    = "{driver} calibration failed (known issue)"
-source   = "kernel"
-message  = '(?P<driver>rtw88_\w+) \S+: failed to do dpk calibration'
-note     = "a Wi-Fi power calibration step; the driver goes on without it"
+id      = "known.rtw88-dpk"
+level   = "info"
+source  = "kernel"
+text    = "{driver} {_}: failed to do dpk calibration"
+title   = "{driver} calibration failed (known issue)"
+note    = "a Wi-Fi power calibration step; the driver goes on without it"
 explain = """
 The rtw88 driver could not complete a calibration step of the Wi-Fi transmitter and continues
 without it.
 """
-
-[[rule.example]]
-match = "rtw88_8822ce 0000:01:00.0: failed to do dpk calibration"
+match   = ["rtw88_8822ce 0000:01:00.0: failed to do dpk calibration"]

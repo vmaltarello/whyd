@@ -22,13 +22,19 @@ func runRules(args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("%-24s %-9s %-6s %s\n", "ID", "LEVEL", "KIND", "FROM")
-	for _, r := range set.Rules {
+	fmt.Printf("%-24s %-8s %s\n", "ID", "LEVEL", "FROM")
+	row := func(r *rules.Rule, level string) {
 		from := r.Origin
-		if r.Overrides != "" {
-			from += " (replaces " + r.Overrides + ")"
+		if r.Changes != "" {
+			from += " (changes " + r.Changes + ")"
 		}
-		fmt.Printf("%-24s %-9s %-6s %s\n", r.ID, r.Severity, r.Kind, from)
+		fmt.Printf("%-24s %-8s %s\n", r.ID, level, from)
+	}
+	for _, r := range set.Rules {
+		row(r, r.Level.String())
+	}
+	for _, r := range set.Off {
+		row(r, "off")
 	}
 	where := "~/.config/whyd/rules"
 	if dirs := userRuleDirs(); len(dirs) > 0 {
@@ -80,9 +86,9 @@ func testRules(paths []string) error {
 		failures++
 	}
 	for _, r := range set.Rules {
-		examples += len(r.Examples)
-		if len(r.Examples) == 0 && r.Origin != "built-in" {
-			fmt.Printf("note %s (%s): no [[rule.example]], add one real line it must match\n", r.ID, r.Origin)
+		examples += len(r.Match) + len(r.NoMatch)
+		if len(r.Match) == 0 && r.Origin != "built-in" {
+			fmt.Printf("note %s (%s): no example, add a real line it must match: match = [\"...\"]\n", r.ID, r.Origin)
 		}
 	}
 	for _, p := range set.Problems {

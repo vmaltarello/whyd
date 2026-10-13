@@ -14,7 +14,6 @@ linters:
   settings:
     exhaustive:
       default-signifies-exhaustive: true # a default case covers the missing values
-      ignore-enum-types: ^regexp/syntax\.Op$ # literalsIn handles only the ops it can use
     gosec:
       excludes:
         - G204 # subprocesses: journalctl, wl-copy, xclip with fixed names, no shell

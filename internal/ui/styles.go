@@ -36,15 +36,15 @@ var (
 	stKey     = lipgloss.NewStyle().Reverse(true)              // key labels in the key bar
 )
 
-func levelStyle(s rules.Severity) lipgloss.Style {
-	switch s {
-	case rules.Critical:
+func levelStyle(l rules.Level) lipgloss.Style {
+	switch l {
+	case rules.Err:
 		return stRedB
-	case rules.Warning:
+	case rules.Warn:
 		return stYellowB
-	case rules.Noise:
+	case rules.Hidden:
 		return stGray
-	default: // rules.Info
+	default: // rules.Info, rules.Context
 		return stPlain
 	}
 }
