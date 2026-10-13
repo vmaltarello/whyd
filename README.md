@@ -66,18 +66,17 @@ Reading the system journal needs a user in the `systemd-journal`, `adm` or `whee
 ## Use
 
 ```
-whyd                 the previous boot, interactive
-whyd -b -3           another boot (same numbers as journalctl -b; 1 is the oldest)
-whyd list -u         the sessions of the last 30 days that didn't shut down cleanly
-                     (--days N or --all to go further back)
-whyd --text          the summary as plain text
+whyd                 the previous session, in the interface (as text in a pipe or a file)
+whyd -b -3           another session (same numbers as journalctl -b; 1 is the oldest)
 whyd report          a Markdown report, redacted, ready to paste
-whyd --file F        one boot recorded on another machine
+whyd --file F        a session recorded on another machine
                      (journalctl -b -1 -o json --all > F, - for stdin)
+whyd rules           the rules in use, checked
 ```
 
 In the interface the arrows do everything: ↑ ↓ move, → and ← switch panel, `Enter` opens a
-problem's journal lines. `L` shows the last minutes, `R` the report, `?` every key.
+problem's journal lines. `U` keeps only the sessions that didn't shut down cleanly, `L` shows
+the last minutes, `R` the report, `?` every key.
 
 <table>
 <tr>

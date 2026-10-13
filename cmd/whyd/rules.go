@@ -10,47 +10,13 @@ import (
 	builtin "github.com/vmaltarello/whyd/rules"
 )
 
-// runRules handles "whyd rules" (list) and "whyd rules test [path...]".
-func runRules(args []string) error {
-	if len(args) > 0 && args[0] == "test" {
-		return testRules(args[1:])
-	}
-	if len(args) > 0 {
-		return fmt.Errorf("unknown rules command %q (try: whyd rules, whyd rules test)", args[0])
-	}
-	set, err := rules.LoadDefault(userRuleDirs()...)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("%-24s %-8s %s\n", "ID", "LEVEL", "FROM")
-	row := func(r *rules.Rule, level string) {
-		from := r.Origin
-		if r.Changes != "" {
-			from += " (changes " + r.Changes + ")"
-		}
-		fmt.Printf("%-24s %-8s %s\n", r.ID, level, from)
-	}
-	for _, r := range set.Rules {
-		row(r, r.Level.String())
-	}
-	for _, r := range set.Off {
-		row(r, "off")
-	}
-	where := "~/.config/whyd/rules"
-	if dirs := userRuleDirs(); len(dirs) > 0 {
-		where = dirs[0]
-	}
-	fmt.Printf("\n%d rules. Your own rules go in %s (*.toml); the format is in\n%s\n",
-		len(set.Rules), where, "https://github.com/vmaltarello/whyd/blob/main/docs/RULES.md")
-	for _, p := range set.Problems {
-		fmt.Println("skipped:", p)
-	}
-	return nil
-}
+const rulesGuide = "https://github.com/vmaltarello/whyd/blob/main/docs/RULES.md"
 
-// testRules loads the built-in rules plus the given files or directories (default: the user's
-// rule directory) and runs every example. It fails when an example fails or a rule is invalid.
-func testRules(paths []string) error {
+// runRules lists the rules in use, built in and the user's, and checks them: the mistakes that
+// made whyd skip a rule, examples that don't do what they say, rules that can never fire. With
+// files or directories, those are checked instead of the user's rule directory, before they are
+// put in place. It fails when there is a problem.
+func runRules(paths []string) error {
 	sources := []rules.Source{{Name: "built-in", FS: builtin.Builtin, Strict: true}}
 	explicit := len(paths) > 0
 	if !explicit {
@@ -60,7 +26,7 @@ func testRules(paths []string) error {
 		fi, err := os.Stat(p)
 		switch {
 		case err != nil && explicit:
-			return err
+			return fmt.Errorf("no rule file or directory %q", p)
 		case err != nil:
 			continue // no user directory yet: only the built-in rules
 		case fi.IsDir():
@@ -80,10 +46,31 @@ func testRules(paths []string) error {
 	if err != nil {
 		return err
 	}
-	failures, examples := 0, 0
+
+	fmt.Printf("%-24s %-8s %s\n", "ID", "LEVEL", "FROM")
+	row := func(r *rules.Rule, level string) {
+		from := r.Origin
+		if r.Changes != "" {
+			from += " (changes " + r.Changes + ")"
+		}
+		fmt.Printf("%-24s %-8s %s\n", r.ID, level, from)
+	}
+	for _, r := range set.Rules {
+		row(r, r.Level.String())
+	}
+	for _, r := range set.Off {
+		row(r, "off")
+	}
+	fmt.Println()
+
+	problems, examples := 0, 0
+	for _, p := range set.Problems {
+		fmt.Println("SKIP", p)
+		problems++
+	}
 	for _, f := range set.Test() {
 		fmt.Println("FAIL", f)
-		failures++
+		problems++
 	}
 	for _, r := range set.Rules {
 		examples += len(r.Match) + len(r.NoMatch)
@@ -91,16 +78,19 @@ func testRules(paths []string) error {
 			fmt.Printf("note %s (%s): no example, add a real line it must match: match = [\"...\"]\n", r.ID, r.Origin)
 		}
 	}
-	for _, p := range set.Problems {
-		fmt.Println("SKIP", p)
-		failures++
-	}
-	if failures > 0 {
-		if failures == 1 {
-			return fmt.Errorf("1 problem in %d rules", len(set.Rules))
+	if !explicit {
+		where := "~/.config/whyd/rules"
+		if dirs := userRuleDirs(); len(dirs) > 0 {
+			where = dirs[0]
 		}
-		return fmt.Errorf("%d problems in %d rules", failures, len(set.Rules))
+		fmt.Printf("Your own rules go in %s (*.toml); the format is in\n%s\n", where, rulesGuide)
 	}
-	fmt.Printf("ok: %d rules, %d examples\n", len(set.Rules), examples)
-	return nil
+	switch problems {
+	case 0:
+		fmt.Printf("ok: %d rules, %d examples\n", len(set.Rules), examples)
+		return nil
+	case 1:
+		return fmt.Errorf("1 problem in %d rules", len(set.Rules))
+	}
+	return fmt.Errorf("%d problems in %d rules", problems, len(set.Rules))
 }

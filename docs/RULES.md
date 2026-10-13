@@ -72,7 +72,7 @@ Line by line:
 - `text`: the text to look for in the line, anywhere in it.
 - `title`: what the problem is called in the list.
 
-Run `whyd --text` (or open whyd) on that session:
+Open whyd on that session, or print its summary with `whyd -b N | cat`:
 
 ```
 TIME          LEVEL  WHAT                                                 TIMES
@@ -149,7 +149,7 @@ lines. This is where each field appears in whyd:
 └────────────────────────────────────────────────────────────────┘
 ```
 
-The same title, level and note go into `whyd --text` and into the report.
+The same title, level and note go into the summary as text and into the report.
 
 ### 6. Test it
 
@@ -163,12 +163,16 @@ nomatch = ["cfg80211: Process '/usr/bin/set-wireless-regdom' succeeded."]
 Then run:
 
 ```
-$ whyd rules test
+$ whyd rules
+ID                       LEVEL    FROM
+mine.udev-command        warn     /home/you/.config/whyd/rules/mine.toml
+auth.failed              warn     built-in
+…
 ok: 53 rules, 68 examples
 ```
 
-`whyd rules test` checks every rule: mistakes in the file, examples that don't do what they
-say, and rules that can never fire. If something is wrong it tells you what:
+`whyd rules` lists the rules in use and checks them all: mistakes in the file, examples that
+don't do what they say, and rules that can never fire. If something is wrong it tells you what:
 
 ```
 SKIP /home/you/.config/whyd/rules/mine.toml: rule "mine.udev-command" skipped: unknown field "sorce", did you mean "source"?
@@ -367,9 +371,9 @@ hour.
 - Your rules: `~/.config/whyd/rules/*.toml` (`$XDG_CONFIG_HOME/whyd/rules/` if set). With
   `sudo`, whyd usually reads root's directory instead.
 - The built-in rules: [`rules/`](../rules), compiled into whyd.
-- `whyd rules` lists every rule, its level and the file it comes from.
-- `whyd rules test` checks your rules; `whyd rules test file.toml` checks one file before
-  you put it in place. It exits with status 1 when something is wrong.
+- `whyd rules` lists every rule, its level and the file it comes from, and checks them;
+  `whyd rules file.toml` checks one file before you put it in place. It exits with status 1
+  when something is wrong.
 
 ## Writing a good rule
 

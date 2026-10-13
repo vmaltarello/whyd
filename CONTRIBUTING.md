@@ -31,7 +31,7 @@ WHYD_LIVE=1 go test -run TestSelection ./internal/analyze
 
 The most useful contribution. Start from the lines whyd lists as not recognised (`W` in the
 interface, "Not recognised" in `whyd report`), write a rule with at least one real example
-line and one that must not match, and check it with `whyd rules test`. The format and the
+line and one that must not match, and check it with `whyd rules mine.toml`. The format and the
 guidelines are in [docs/RULES.md](docs/RULES.md).
 
 ## A journal that whyd gets wrong

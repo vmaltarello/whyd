@@ -127,7 +127,7 @@ func newModel(res *analyze.Result, src Source) *model {
 		}
 	}
 	if src.Skipped > 0 {
-		m.status = fmt.Sprintf("%d of your rules skipped: run whyd rules test", src.Skipped)
+		m.status = fmt.Sprintf("%d of your rules skipped: run whyd rules", src.Skipped)
 	}
 	return m
 }

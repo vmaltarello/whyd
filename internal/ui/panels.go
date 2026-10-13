@@ -23,7 +23,7 @@ func (m *model) tooSmall() string {
 		fmt.Sprintf("The terminal is %d×%d.", m.w, m.h),
 		fmt.Sprintf("whyd needs at least %d×%d.", minW, minH),
 		"",
-		"Make the window larger, or use whyd --text.",
+		"Make the window larger, or run whyd | less.",
 		"Q quits.",
 	}
 	var out []string

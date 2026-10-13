@@ -19,7 +19,7 @@ body:
     attributes:
       label: The report
       description: |
-        Run `whyd report -b N` for that session (N as in `whyd list`) and paste the output.
+        Run `whyd report -b N` for that session (N as in `journalctl -b`: -1 the previous one) and paste the output.
         It is redacted, but read it before posting.
       render: markdown
     validations:

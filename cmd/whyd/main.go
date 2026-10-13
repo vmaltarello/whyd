@@ -6,15 +6,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"runtime/debug"
-	"slices"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/vmaltarello/whyd/internal/analyze"
 	"github.com/vmaltarello/whyd/internal/cache"
@@ -32,24 +29,24 @@ var releaseTag = regexp.MustCompile(`^v\d+\.\d+\.\d+$`)
 const usage = `whyd: find out why your last session stopped
 
 usage:
-  whyd [-b N] [--file PATH] [--text]   open the previous boot (text when not in a terminal)
-  whyd list [-u] [--days N | --all]    the sessions of the last 30 days and how they ended
-                                       (-u: only the bad ones)
-  whyd report [-b N] [--file PATH] [--raw]
-                                       Markdown summary, redacted, ready to paste
-  whyd rules                           the rules in use, and where each one comes from
-  whyd rules test [file|dir...]        check rules against their examples (default: your rules)
-  whyd --version
+  whyd [-b N] [--file PATH]          the session in the interface (as text when the output
+                                     is not a terminal)
+  whyd report [-b N] [--file PATH]   the session as a Markdown report, redacted, to paste
+  whyd rules [FILE|DIR...]           the rules in use, checked; with files, check those
 
-  -b N         boot, as in journalctl -b: 0 this one, -1 the previous (default), 1 the oldest
-  --file PATH  analyse one recorded boot (journalctl -b N -o json --all, .gz allowed, - for stdin)
-  --text       print the summary instead of opening the interface
-  --raw        don't redact the report
-  --days N     how far back whyd list and the interface go at first (default 30)
-  --all        every session in the journal
+  -b N         the session, as in journalctl -b: -1 the previous one (default), 0 this one,
+               1 the oldest
+  --file PATH  a session recorded on another machine, with
+               journalctl -b -1 -o json --all > PATH (.gz allowed, - for standard input)
+  --version    the version of whyd
+
+examples:
+  whyd -b -3                   three sessions ago
+  whyd report > report.md      the report of the previous session, in a file
+  whyd rules mine.toml         check a rule file before putting it in ~/.config/whyd/rules
 
 Rules: built in, plus any *.toml in ~/.config/whyd/rules/ (yours first; same id: changes it).
-A broken user rule is skipped with a message, it never stops whyd.
+Exit status: 0 done, 1 an error or a problem in the rules, 2 a wrong command line.
 `
 
 func main() {
@@ -58,64 +55,26 @@ func main() {
 	}
 	report.Version = version
 
-	fl := flag.NewFlagSet("whyd", flag.ContinueOnError)
-	fl.Usage = func() { fmt.Print(usage) }
-	boot := fl.Int("b", -1, "")
-	file := fl.String("file", "", "")
-	text := fl.Bool("text", false, "")
-	raw := fl.Bool("raw", false, "")
-	unclean := fl.Bool("u", false, "")
-	showVersion := fl.Bool("version", false, "")
-	days := fl.Int("days", int(ui.Recent.Hours()/24), "")
-	all := fl.Bool("all", false, "")
-	// the command may come before or after the flags: "whyd report -b -2", "whyd -b -2 report"
-	cmd, rest := "", []string(nil)
-	args := os.Args[1:]
-	for {
-		if err := fl.Parse(args); err != nil {
-			if errors.Is(err, flag.ErrHelp) {
-				return
-			}
-			os.Exit(2)
-		}
-		if fl.NArg() == 0 {
-			break
-		}
-		if cmd == "" {
-			cmd = fl.Arg(0)
-		} else {
-			rest = append(rest, fl.Arg(0))
-		}
-		args = fl.Args()[1:]
-	}
-	if *showVersion {
+	o, err := parseArgs(os.Args[1:])
+	switch {
+	case err != nil:
+		fmt.Fprintf(os.Stderr, "whyd: %v (see whyd --help)\n", err)
+		os.Exit(2)
+	case o.help:
+		fmt.Print(usage)
+		return
+	case o.version:
 		fmt.Println("whyd", version)
 		return
 	}
-
-	if cmd != "rules" && len(rest) > 0 {
-		fmt.Fprintf(os.Stderr, "whyd: unexpected %q\n", rest[0])
-		os.Exit(2)
-	}
-
 	ctx := context.Background()
-	var err error
-	switch cmd {
+	switch o.cmd {
 	case "":
-		err = runOpen(ctx, *boot, *file, *text || !isTerminal(), since(*days, *all))
-	case "list":
-		err = runList(ctx, *unclean, since(*days, *all))
+		err = runOpen(ctx, o.boot, o.file)
 	case "report":
-		err = runReport(ctx, *boot, *file, *raw)
+		err = runReport(ctx, o.boot, o.file)
 	case "rules":
-		err = runRules(rest)
-	case "help":
-		fmt.Print(usage)
-	case "version":
-		fmt.Println("whyd", version)
-	default:
-		fmt.Fprintf(os.Stderr, "whyd: unknown command %q\n\n%s", cmd, usage)
-		os.Exit(2)
+		err = runRules(o.paths)
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "whyd:", err)
@@ -123,12 +82,86 @@ func main() {
 	}
 }
 
-// since is when the sessions shown start: --days ago, or the beginning of time with --all.
-func since(days int, all bool) time.Time {
-	if all {
-		return time.Unix(0, 0)
+// options are what the command line asks for.
+type options struct {
+	cmd     string   // "" (the interface), "report" or "rules"
+	boot    int      // -b
+	file    string   // --file
+	paths   []string // the rule files and directories to check, for rules
+	help    bool
+	version bool
+}
+
+// parseArgs reads the command line. The command may come before or after the options:
+// "whyd report -b -2", "whyd -b -2 report".
+func parseArgs(args []string) (options, error) {
+	o := options{boot: -1}
+	fl := flag.NewFlagSet("whyd", flag.ContinueOnError)
+	fl.SetOutput(io.Discard) // main writes the error, once
+	fl.IntVar(&o.boot, "b", -1, "")
+	fl.StringVar(&o.file, "file", "", "")
+	fl.BoolVar(&o.version, "version", false, "")
+	var words []string
+	for {
+		if err := fl.Parse(args); err != nil {
+			if errors.Is(err, flag.ErrHelp) {
+				o.help = true
+				return o, nil
+			}
+			return o, optionError(err)
+		}
+		if fl.NArg() == 0 {
+			break
+		}
+		words = append(words, fl.Arg(0))
+		args = fl.Args()[1:]
 	}
-	return time.Now().AddDate(0, 0, -days)
+	if len(words) > 0 {
+		o.cmd, words = words[0], words[1:]
+	}
+	switch o.cmd {
+	case "", "report":
+		if len(words) > 0 {
+			return o, fmt.Errorf("unexpected %q", words[0])
+		}
+	case "rules":
+		o.paths = words
+		var err error
+		fl.Visit(func(f *flag.Flag) {
+			if f.Name == "b" || f.Name == "file" {
+				err = fmt.Errorf("%s is for a session, not for rules", dashes("-"+f.Name))
+			}
+		})
+		if err != nil {
+			return o, err
+		}
+	default:
+		return o, fmt.Errorf("unknown command %q: the commands are report and rules", o.cmd)
+	}
+	return o, nil
+}
+
+// optionError says in plain words what the flag package found wrong.
+func optionError(err error) error {
+	msg := err.Error()
+	if name, ok := strings.CutPrefix(msg, "flag provided but not defined: "); ok {
+		return fmt.Errorf("unknown option %s", dashes(name))
+	}
+	if name, ok := strings.CutPrefix(msg, "flag needs an argument: "); ok {
+		return fmt.Errorf("%s needs a value", dashes(name))
+	}
+	if strings.Contains(msg, "for flag -b") {
+		return errors.New("-b needs a number, as in -b -1")
+	}
+	return err
+}
+
+// dashes writes an option the way it is documented: -b, --file.
+func dashes(name string) string {
+	if len(name) > 2 && !strings.HasPrefix(name, "--") {
+		return "-" + name
+	}
+	return name
 }
 
 func isTerminal() bool {
@@ -206,7 +239,7 @@ func (s *session) analyse(ctx context.Context, index int) (*analyze.Result, erro
 	if index == -1 && len(s.boots) == 1 {
 		return nil, errors.New("this is the only boot in the journal: nothing before it to look at")
 	}
-	return nil, fmt.Errorf("no boot %d in the journal (see whyd list)", index)
+	return nil, fmt.Errorf("no session %d in the journal (journalctl --list-boots lists them)", index)
 }
 
 // summary returns how a boot ended, from the cache for ended boots already seen.
@@ -271,7 +304,7 @@ func (s *session) result(ctx context.Context, index int, file string) (*analyze.
 	return s.analyse(ctx, index)
 }
 
-func runOpen(ctx context.Context, index int, file string, asText bool, from time.Time) error {
+func runOpen(ctx context.Context, index int, file string) error {
 	s, err := newSession(ctx, file == "")
 	if err != nil {
 		return err
@@ -280,10 +313,10 @@ func runOpen(ctx context.Context, index int, file string, asText bool, from time
 	if err != nil {
 		return err
 	}
-	if asText {
+	if !isTerminal() { // a pipe or a file: the summary as text
 		return report.Text(os.Stdout, res)
 	}
-	src := ui.Source{Skipped: len(s.rules.Problems), Since: from, Boots: s.boots}
+	src := ui.Source{Skipped: len(s.rules.Problems), Boots: s.boots}
 	if file == "" {
 		src.Analyse = func(i int) (*analyze.Result, error) { return s.analyse(ctx, i) }
 		src.Summarize = func(i int) (analyze.Summary, error) { return s.summary(ctx, i) }
@@ -293,7 +326,7 @@ func runOpen(ctx context.Context, index int, file string, asText bool, from time
 	return err
 }
 
-func runReport(ctx context.Context, index int, file string, raw bool) error {
+func runReport(ctx context.Context, index int, file string) error {
 	s, err := newSession(ctx, file == "")
 	if err != nil {
 		return err
@@ -302,67 +335,5 @@ func runReport(ctx context.Context, index int, file string, raw bool) error {
 	if err != nil {
 		return err
 	}
-	var red *report.Redactor
-	if !raw {
-		red = report.NewRedactor(res)
-	}
-	return report.Markdown(os.Stdout, res, red)
-}
-
-func runList(ctx context.Context, onlyUnclean bool, since time.Time) error {
-	s, err := newSession(ctx, true)
-	if err != nil {
-		return err
-	}
-	all := s.boots
-	for len(s.boots) > 1 && s.boots[0].Last.Before(since) { // oldest first: drop the old ones
-		s.boots = s.boots[1:]
-	}
-	older := len(all) - len(s.boots)
-	sums := s.summaries(ctx)
-	s.saveCache()
-	unclean := 0
-	for i, b := range slices.Backward(s.boots) { // newest first
-		r := sums[i]
-		if r.err != nil {
-			fmt.Printf("%4d  %s  error: %v\n", b.Index, b.First.Format("Mon 2 Jan 15:04"), r.err)
-			continue
-		}
-		if r.sum.Bad() {
-			unclean++
-		}
-		if onlyUnclean && !r.sum.Bad() {
-			continue
-		}
-		fmt.Printf("%4d  %-17s %7s  %-13s %s\n", b.Index, report.When(b.First),
-			analyze.Duration(b.Duration()), r.sum.Kind, r.sum.Worst)
-	}
-	fmt.Printf("\n%d of %d sessions didn't shut down properly", unclean, len(s.boots))
-	if older > 0 {
-		fmt.Printf(" (%d older ones not shown: --days N or --all)", older)
-	}
-	fmt.Println()
-	return nil
-}
-
-type listResult struct {
-	sum analyze.Summary
-	err error
-}
-
-// summaries gets the summary of every boot, a few at a time (each new one is a journalctl run).
-func (s *session) summaries(ctx context.Context) []listResult {
-	out := make([]listResult, len(s.boots))
-	sem := make(chan struct{}, max(2, runtime.NumCPU()/2))
-	var wg sync.WaitGroup
-	for i, b := range s.boots {
-		wg.Go(func() {
-			sem <- struct{}{}
-			defer func() { <-sem }()
-			sum, err := s.summary(ctx, b.Index)
-			out[i] = listResult{sum, err}
-		})
-	}
-	wg.Wait()
-	return out
+	return report.Markdown(os.Stdout, res, report.NewRedactor(res))
 }
