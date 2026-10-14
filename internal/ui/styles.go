@@ -11,8 +11,9 @@ import (
 )
 
 // Only the terminal's own palette, and colour only where it means something: red for errors and
-// sessions that didn't shut down, yellow for warnings, green for clean ends. Selection and key
-// labels use reverse video, so they work with any theme.
+// sessions that ended badly, yellow for warnings, green for clean ends; cyan only for program
+// names in journal lines, to scan them. Bold for titles, verdicts, the selection and key letters.
+// The selection is a bar on the left, so it works with any theme.
 var (
 	red    = lipgloss.ANSIColor(1)
 	green  = lipgloss.ANSIColor(2)
@@ -21,31 +22,26 @@ var (
 	white  = lipgloss.ANSIColor(7)
 	gray   = lipgloss.ANSIColor(8)
 
-	stPlain   = lipgloss.NewStyle()
-	stBold    = lipgloss.NewStyle().Bold(true)
-	stDim     = lipgloss.NewStyle().Foreground(white)
-	stGray    = lipgloss.NewStyle().Foreground(gray)
-	stRed     = lipgloss.NewStyle().Foreground(red)
-	stRedB    = stRed.Bold(true)
-	stGreen   = lipgloss.NewStyle().Foreground(green)
-	stYellow  = lipgloss.NewStyle().Foreground(yellow)
-	stYellowB = stYellow.Bold(true)
-	stCyan    = lipgloss.NewStyle().Foreground(cyan)
-	stSel     = lipgloss.NewStyle().Reverse(true)              // selection in the focused panel
-	stSelBlur = lipgloss.NewStyle().Bold(true).Underline(true) // selection in the other panel
-	stKey     = lipgloss.NewStyle().Reverse(true)              // key labels in the key bar
+	stPlain  = lipgloss.NewStyle()
+	stBold   = lipgloss.NewStyle().Bold(true)
+	stDim    = lipgloss.NewStyle().Foreground(white)
+	stGray   = lipgloss.NewStyle().Foreground(gray)
+	stRed    = lipgloss.NewStyle().Foreground(red)
+	stGreen  = lipgloss.NewStyle().Foreground(green)
+	stYellow = lipgloss.NewStyle().Foreground(yellow)
+	stCyan   = lipgloss.NewStyle().Foreground(cyan)
 )
 
 func levelStyle(l rules.Level) lipgloss.Style {
 	switch l {
 	case rules.Err:
-		return stRedB
+		return stRed
 	case rules.Warn:
-		return stYellowB
+		return stYellow
 	case rules.Hidden:
 		return stGray
 	default: // rules.Info, rules.Context
-		return stPlain
+		return stDim
 	}
 }
 
@@ -56,7 +52,19 @@ func endStyle(k analyze.EndKind) lipgloss.Style {
 	case k == analyze.EndRunning:
 		return stPlain
 	}
-	return stRedB
+	return stRed
+}
+
+// mark is the left edge of a list row: a bar on the selected one, white when its panel has the
+// focus, grey when not.
+func mark(sel, focused bool) string {
+	switch {
+	case !sel:
+		return "  "
+	case focused:
+		return "▌ "
+	}
+	return stGray.Render("▌") + " "
 }
 
 // fit cuts a (possibly styled) string to w cells.
@@ -80,15 +88,23 @@ func spread(left, right string, w int) string {
 	return left + strings.Repeat(" ", max(1, w-lipgloss.Width(left)-rw)) + right
 }
 
-// frame draws a square border of w×h around lines, with the title in the top edge.
-// The border is bright when the panel has the focus.
+// frame draws a rounded border of w×h around lines, with the title in the top edge. The border
+// is bright when the panel has the focus. A title already styled keeps its styles.
 func frame(lines []string, w, h int, title string, focused bool) []string {
-	bst, tst := stGray, stDim
+	return frameNote(lines, w, h, title, "", focused)
+}
+
+// frameNote is frame with a note in the bottom edge, on the right: what the panel doesn't show.
+func frameNote(lines []string, w, h int, title, note string, focused bool) []string {
+	bst := stGray
 	if focused {
-		bst, tst = stPlain, stBold
+		bst = stPlain
 	}
-	top := bst.Render("┌─") + tst.Render(" "+title+" ")
-	top += bst.Render(strings.Repeat("─", max(0, w-3-lipgloss.Width(title)-2)) + "┐")
+	if !strings.Contains(title, "\x1b") {
+		title = stBold.Render(title)
+	}
+	top := bst.Render("╭─") + " " + title + " "
+	top += bst.Render(strings.Repeat("─", max(0, w-5-lipgloss.Width(title))) + "╮")
 	out := []string{fit(top, w)}
 	for i := range h - 2 {
 		l := ""
@@ -97,7 +113,10 @@ func frame(lines []string, w, h int, title string, focused bool) []string {
 		}
 		out = append(out, bst.Render("│")+" "+pad(l, w-4)+" "+bst.Render("│"))
 	}
-	return append(out, bst.Render("└"+strings.Repeat("─", max(0, w-2))+"┘"))
+	if note == "" || lipgloss.Width(note) > w-8 {
+		return append(out, bst.Render("╰"+strings.Repeat("─", max(0, w-2))+"╯"))
+	}
+	return append(out, bst.Render("╰"+strings.Repeat("─", w-5-lipgloss.Width(note)))+" "+note+" "+bst.Render("─╯"))
 }
 
 // wrap breaks plain text into lines of at most w cells.

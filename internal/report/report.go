@@ -94,7 +94,7 @@ func Markdown(w io.Writer, r *analyze.Result, red *Redactor) error {
 			if d := Detail(r, ev); d != "" {
 				what += " (" + clean(d) + ")"
 			}
-			p("| %s | %s | %s | %d |\n", ev.First.Format("Mon 15:04"), ev.Rule.Level, cell(what), ev.Count)
+			p("| %s | %s | %s | %d |\n", ev.First.Format("Mon 15:04"), ev.Rule.Level.Word(), cell(what), ev.Count)
 		}
 	}
 	if r.OOM != nil && len(r.OOM.Top) > 0 {
@@ -105,18 +105,18 @@ func Markdown(w io.Writer, r *analyze.Result, red *Redactor) error {
 		p("\nLargest processes at the first out-of-memory report: %s\n", strings.Join(top, ", "))
 	}
 	if len(r.Unknown) > 0 {
-		p("\n### Not recognised\n\n%d warning and error lines matched no rule. The most serious and frequent:\n\n", r.UnknownErr+r.UnknownW)
-		p("| priority | times | source | message |\n|---|---|---|---|\n")
+		p("\n### Other warnings\n\n%s. The most serious and frequent:\n\n", Others(r))
+		p("| level | times | program | message |\n|---|---|---|---|\n")
 		for _, g := range r.Unknown[:min(10, len(r.Unknown))] {
 			prio := "warning"
 			if g.Priority <= 3 {
-				prio = "err"
+				prio = "error"
 			}
 			p("| %s | %d | %s | %s |\n", prio, g.Count, cell(clean(g.Source)), cell(clean(g.Message)))
 		}
 	}
 	if n := HiddenSummary(r); n != "" {
-		p("\nHidden: %s\n", n)
+		p("\nHarmless lines hidden: %s\n", n)
 	}
 
 	var groups []analyze.TailGroup

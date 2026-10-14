@@ -75,10 +75,10 @@ func (m *model) listKey(k string) bool {
 	return true
 }
 
-// listView draws items full screen: the selected one in reverse video and expanded to its whole
+// listView draws items full screen: the selected one marked, in bold and expanded to its whole
 // text, the others on one line; "/" filters them.
-func (m *model) listView(title, header string, items []item, keys [][2]string) string {
-	w, h := m.w-4, m.h-4 // inside the frame
+func (m *model) listView(title, header, note string, items []item, keys [][2]string) string {
+	w, h := m.w-4-2, m.h-4 // inside the frame and the mark
 	if header != "" {
 		h-- // the column names stay on top, out of the scrolling
 	}
@@ -111,28 +111,33 @@ func (m *model) listView(title, header string, items []item, keys [][2]string) s
 	for l := max(0, min(m.off, total-h)); l < min(total, max(0, min(m.off, total-h))+h); l++ {
 		switch {
 		case l < m.sel:
-			lines = append(lines, firstLine(shown[l], w))
+			lines = append(lines, "  "+firstLine(shown[l], w))
 		case l < m.sel+len(exp):
-			lines = append(lines, stSel.Render(pad(ansi.Strip(exp[l-m.sel]), w)))
+			lines = append(lines, mark(l == m.sel, true)+bold(exp[l-m.sel]))
 		default:
-			lines = append(lines, firstLine(shown[l-len(exp)+1], w))
+			lines = append(lines, "  "+firstLine(shown[l-len(exp)+1], w))
 		}
 	}
 	if len(shown) == 0 {
-		lines = append(lines, stDim.Render("no lines match /"+m.search))
+		lines = append(lines, "  "+stDim.Render("no lines match /"+m.search))
 	}
 
-	keys = append([][2]string{{"↑↓", "Select"}, {"/", "Search"}}, keys...)
+	keys = append([][2]string{{"↑↓", "move"}, {"/", "search"}}, keys...)
 	if m.searching {
-		keys = [][2]string{{"Enter", "Keep filter"}, {"Esc", "Clear"}}
+		keys = [][2]string{{"enter", "keep the filter"}, {"esc", "clear"}}
 	}
 	out := []string{m.header()}
 	shownLines := lines
 	if header != "" {
-		shownLines = append([]string{stGray.Bold(true).Render(fit(header, w))}, shownLines...)
+		shownLines = append([]string{"  " + stGray.Render(fit(header, w))}, shownLines...)
 	}
-	out = append(out, frame(shownLines, m.w, m.h-2, title, true)...)
+	out = append(out, frameNote(shownLines, m.w, m.h-2, title, note, true)...)
 	return strings.Join(append(out, m.keyBar(keys)), "\n")
+}
+
+// bold makes a styled line bold and keeps its colours: every reset turns bold on again.
+func bold(s string) string {
+	return "\x1b[1m" + strings.ReplaceAll(s, "\x1b[m", "\x1b[m\x1b[1m") + "\x1b[m"
 }
 
 // firstLine is an item on one line, cut to w cells.

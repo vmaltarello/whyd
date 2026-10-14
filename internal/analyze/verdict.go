@@ -21,7 +21,9 @@ const (
 	EndUnclean                 // the journal just stops
 )
 
-var endNames = [...]string{"running", "power-off", "reboot", "shutdown", "died asleep", "kernel panic", "no shutdown"}
+// the names say what happened in words anyone uses, not in systemd's: "abrupt end", not "no
+// shutdown target reached"
+var endNames = [...]string{"running", "shut down", "restarted", "shut down", "never woke up", "kernel panic", "abrupt end"}
 
 func (k EndKind) String() string { return endNames[k] }
 
@@ -92,7 +94,7 @@ func (s *endState) feed(e journal.Entry, line int) {
 	}
 }
 
-// verdict says how the boot ended. Summary starts with the kind ("no shutdown, journal stops at …")
+// verdict says how the boot ended. Summary starts with the kind ("abrupt end, journal stops at …")
 // so outputs can colour that first word and print the rest as is.
 func (s *endState) verdict(r *Result) Verdict {
 	end := r.Boot.Last.Format("15:04:05")
@@ -102,21 +104,21 @@ func (s *endState) verdict(r *Result) Verdict {
 	case s.stoppedAt > 0 && s.lines-s.stoppedAt < stopWindow && r.Boot.Last.Sub(s.stoppedTime) <= TailKeep:
 		switch s.target {
 		case "poweroff":
-			return Verdict{EndPowerOff, "power-off at " + end}
+			return Verdict{EndPowerOff, "shut down at " + end}
 		case "reboot":
-			return Verdict{EndReboot, "reboot at " + end}
+			return Verdict{EndReboot, "restarted at " + end}
 		}
-		return Verdict{EndShutdown, "shutdown at " + end}
+		return Verdict{EndShutdown, "shut down at " + end}
 	case s.panic != "": // before "asleep": a panic while suspending or resuming is still a panic
 		return Verdict{EndPanic, "kernel panic: " + s.panic}
 	case s.sleeping && s.hibernate:
-		return Verdict{EndAsleep, fmt.Sprintf("died asleep: hibernated at %s and never resumed",
+		return Verdict{EndAsleep, fmt.Sprintf("never woke up: hibernated at %s and never resumed",
 			s.sleepStart.Format("15:04"))}
 	case s.sleeping:
-		return Verdict{EndAsleep, fmt.Sprintf("died asleep: suspended at %s and never resumed",
+		return Verdict{EndAsleep, fmt.Sprintf("never woke up: suspended at %s and never resumed",
 			s.sleepStart.Format("15:04"))}
 	}
-	sum := "no shutdown, journal stops at " + end
+	sum := "abrupt end, journal stops at " + end
 	if g := r.Gap(); g > 0 {
 		sum += ", next boot after " + Duration(g)
 	}

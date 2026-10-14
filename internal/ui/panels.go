@@ -14,7 +14,8 @@ import (
 )
 
 const (
-	sessionHeight = 10 // the session panel, top right
+	sessionHeight = 5 // the session panel, top right: how it ended, in three lines
+	detailHeight  = 6 // under the problems list: what the selected problem means
 	minW, minH    = 100, 28
 )
 
@@ -64,9 +65,13 @@ func (m *model) mainView() string {
 		}
 		lines = append(lines, pad(l, lw)+" "+r)
 	}
-	keys := [][2]string{{"↑↓", "Move"}, {"→", "Problems"}, {"L", "Last minutes"}, {"R", "Report"}, {"?", "Help"}, {"Q", "Quit"}}
+	only := "only bad ends"
+	if m.onlyBad {
+		only = "all sessions"
+	}
+	keys := [][2]string{{"↑↓", "move"}, {"→", "problems"}, {"L", "last minutes"}, {"R", "report"}, {"U", only}, {"?", "help"}, {"q", "quit"}}
 	if m.focus == focusProblems {
-		keys = [][2]string{{"↑↓", "Move"}, {"←", "Sessions"}, {"Enter", "Lines"}, {"R", "Report"}, {"?", "Help"}, {"Q", "Quit"}}
+		keys = [][2]string{{"↑↓", "move"}, {"←", "sessions"}, {"enter", "journal lines"}, {"L", "last minutes"}, {"R", "report"}, {"?", "help"}, {"q", "quit"}}
 	}
 	return strings.Join(append(lines, m.keyBar(keys)), "\n")
 }
@@ -89,22 +94,22 @@ func (m *model) header() string {
 		info = fmt.Sprintf("reading sessions %d/%d", done, total)
 	case m.older > 0:
 		days := int(report.Now().Sub(m.since).Hours()/24 + 0.5)
-		info = fmt.Sprintf("%d sessions in the last %d days, %d without a clean shutdown", total, days, nbad)
+		info = fmt.Sprintf("%s in the last %d days, %d without a clean shutdown", report.Plural(total, "session"), days, nbad)
 	default:
-		info = fmt.Sprintf("%d sessions in the journal, %d without a clean shutdown", total, nbad)
+		info = fmt.Sprintf("%s, %d without a clean shutdown", report.Plural(total, "session"), nbad)
 	}
-	left := stBold.Render("whyd") + " " + stDim.Render(report.Version) + "  " + stDim.Render(info)
-	return spread(left, stDim.Render(report.Now().Format("Mon 2 Jan 15:04")), m.w)
+	return fit(" "+stBold.Render("whyd")+" "+stGray.Render(report.Version)+"   "+stDim.Render(info), m.w)
 }
 
+// keyBar is the line of keys at the bottom: the key in bold, what it does in grey-white.
 func (m *model) keyBar(keys [][2]string) string {
-	var b strings.Builder
+	var parts []string
 	for _, k := range keys {
-		b.WriteString(stKey.Render(" "+k[0]+" ") + " " + k[1] + "  ")
+		parts = append(parts, stBold.Render(k[0])+" "+stDim.Render(k[1]))
 	}
-	bar := b.String()
+	bar := " " + strings.Join(parts, "   ")
 	if m.status != "" {
-		return spread(bar, stYellow.Render(m.status), m.w)
+		return spread(bar, stYellow.Render(m.status)+" ", m.w)
 	}
 	return fit(bar, m.w)
 }
@@ -114,44 +119,34 @@ func (m *model) keyBar(keys [][2]string) string {
 func (m *model) sessionsPanel(w, h int, showIdx bool) []string {
 	vis := m.visible()
 	inner := w - 4
+	focused := m.focus == focusSessions
 	var rows []string
 	for i, idx := range vis {
-		rows = append(rows, m.sessionRow(idx, i == m.selS, inner, showIdx))
+		rows = append(rows, m.sessionRow(idx, i == m.selS, focused, inner, showIdx))
 	}
 	if len(vis) == 0 && m.older == 0 {
-		rows = append(rows, stDim.Render("none yet"))
+		rows = append(rows, "  "+stDim.Render("none yet"))
 	}
 	if m.older > 0 {
-		t := fit(fmt.Sprintf("… %d older, Enter: +%d days", m.older, int(Recent.Hours()/24)), inner)
-		if m.selS >= len(vis) {
-			st := stSel
-			if m.focus != focusSessions {
-				st = stSelBlur
-			}
-			rows = append(rows, st.Render(pad(t, inner)))
+		sel := m.selS >= len(vis)
+		t := fit(fmt.Sprintf("… %d older, enter: +%d days", m.older, int(Recent.Hours()/24)), inner-2)
+		if sel {
+			t = stBold.Render(t)
 		} else {
-			rows = append(rows, stGray.Render(t))
+			t = stGray.Render(t)
 		}
+		rows = append(rows, mark(sel, focused)+t)
 	}
-	listH := h - 4
+	listH := h - 2
 	m.offS = scrollTo(m.offS, m.selS, 1, listH)
-	lines := window(rows, m.offS, listH)
-	for len(lines) < listH {
-		lines = append(lines, "")
-	}
-	hint := "U: only the unclean ones"
-	if m.onlyBad {
-		hint = "U: show all"
-	}
-	lines = append(lines, stGray.Render(hint))
 	title := "Sessions"
 	if m.onlyBad {
-		title = "Sessions without shutdown"
+		title = "Sessions without a clean shutdown"
 	}
-	return frame(lines, w, h, title, m.focus == focusSessions)
+	return frame(window(rows, m.offS, listH), w, h, title, focused)
 }
 
-func (m *model) sessionRow(idx int, sel bool, w int, showIdx bool) string {
+func (m *model) sessionRow(idx int, sel, focused bool, w int, showIdx bool) string {
 	var when time.Time
 	for _, b := range m.src.Boots {
 		if b.Index == idx {
@@ -185,18 +180,21 @@ func (m *model) sessionRow(idx int, sel bool, w int, showIdx bool) string {
 	if done && st.err == nil && st.sum.Errors > 0 {
 		errs = fmt.Sprintf("%d err", st.sum.Errors)
 	}
-	plain := label + pad(whenText, 13) + pad(end, 12) + errs
+	whenSt := stDim
 	if sel {
-		if m.focus == focusSessions {
-			return stSel.Render(pad(plain, w))
-		}
-		return stSelBlur.Render(pad(plain, w))
+		whenSt, endSt = stBold, endSt.Bold(true)
 	}
-	return stGray.Render(label) + pad(whenText, 13) + endSt.Render(pad(end, 12)) + stRed.Render(errs)
+	row := mark(sel, focused) + stGray.Render(label) + whenSt.Render(pad(whenText, 13))
+	if errs != "" && lipgloss.Width(row)+len(end)+2+len(errs) <= w { // only where it fits whole
+		return row + endSt.Render(end) + "  " + stRed.Render(errs)
+	}
+	return fit(row+endSt.Render(end), w)
 }
 
 // ---- the selected session, top right ----
 
+// sessionPanel says how the session ended in three lines: the verdict, what it means, and the
+// facts around it.
 func (m *model) sessionPanel(res *analyze.Result, err error, w int) []string {
 	inner := w - 4
 	var lines []string
@@ -207,26 +205,13 @@ func (m *model) sessionPanel(res *analyze.Result, err error, w int) []string {
 	case res == nil:
 		lines = append(lines, stDim.Render("reading the journal…"))
 	default:
-		title = report.SessionName(res)
-		title = strings.ToUpper(title[:1]) + title[1:]
-		lines = append(lines, stBold.Render(report.Span(res))+"  "+stDim.Render(report.Length(res)))
-		kind := res.Verdict.Kind.String()
-		rest := strings.TrimPrefix(res.Verdict.Summary, kind)
-		lines = append(lines, stDim.Render("end     ")+endStyle(res.Verdict.Kind).Render(kind)+rest)
-		if q := report.QuietLine(res); q != "" {
-			lines = append(lines, "        "+q)
+		title = report.When(res.Boot.First) + " → " + report.When(res.Boot.Last)
+		if res.Current {
+			title = report.When(res.Boot.First) + " → now"
 		}
-		if b := report.Before(res); b != "" {
-			label := "before  "
-			if res.Verdict.Kind == analyze.EndRunning {
-				label = "so far  "
-			}
-			lines = append(lines, stDim.Render(label)+b)
-		}
-		for len(lines) < sessionHeight-5 {
-			lines = append(lines, "")
-		}
-		lines = append(lines, m.axis(res, inner)...)
+		head, why := verdictWords(res)
+		st := endStyle(res.Verdict.Kind).Bold(true)
+		lines = append(lines, st.Render("● "+head), "  "+why, "  "+m.facts(res, inner-2))
 	}
 	for i := range lines {
 		lines[i] = fit(lines[i], inner)
@@ -234,196 +219,203 @@ func (m *model) sessionPanel(res *analyze.Result, err error, w int) []string {
 	return frame(lines, w, sessionHeight, title, false)
 }
 
-// axis draws the session on a time line: awake (─), suspended (┄), the serious problems (┼)
-// with their times above, and how it ended (┤).
-func (m *model) axis(r *analyze.Result, w int) []string {
-	from, to := r.Boot.First, r.Boot.Last
-	if w < 20 || !to.After(from) {
-		return nil
-	}
-	span := to.Sub(from)
-	col := func(t time.Time) int {
-		return max(0, min(w-1, int(float64(t.Sub(from))/float64(span)*float64(w-1)+0.5)))
-	}
-	cells := make([]string, w)
-	asleep := make([]bool, w)
-	for _, sl := range r.Sleeps {
-		for c := col(sl.From); c <= col(sl.To); c++ {
-			asleep[c] = true
+// verdictWords is the verdict as a heading and one sentence that says what it means.
+func verdictWords(r *analyze.Result) (head, why string) {
+	switch r.Verdict.Kind {
+	case analyze.EndRunning:
+		return "Running", "The session in use now."
+	case analyze.EndPowerOff, analyze.EndShutdown, analyze.EndReboot:
+		head = "Shut down normally"
+		if r.Verdict.Kind == analyze.EndReboot {
+			head = "Restarted normally"
 		}
-	}
-	for c := range cells {
-		if asleep[c] {
-			cells[c] = stGray.Render("┄")
-		} else {
-			cells[c] = stDim.Render("─")
+		if n := r.Count(rules.Err); n > 0 {
+			return head, fmt.Sprintf("A normal end, but the session had %s: see below.", report.Plural(n, "error"))
 		}
+		return head, "A normal end: nothing in this session points to a problem."
+	case analyze.EndAsleep:
+		what := "suspended"
+		if len(r.Sleeps) > 0 && r.Sleeps[len(r.Sleeps)-1].Hibernate {
+			what = "hibernated"
+		}
+		at := r.Boot.Last
+		if len(r.Sleeps) > 0 {
+			at = r.Sleeps[len(r.Sleeps)-1].From
+		}
+		return "Never woke up", fmt.Sprintf("It %s at %s and never resumed: a flat battery or a failed resume.", what, at.Format("15:04"))
+	case analyze.EndPanic:
+		return "Kernel panic", "The kernel stopped on an error: " + strings.TrimPrefix(r.Verdict.Summary, "kernel panic: ")
+	case analyze.EndUnclean: // below
 	}
-	endSt := endStyle(r.Verdict.Kind)
-	cells[0] = stDim.Render("├")
-	cells[w-1] = endSt.Render("┤")
+	return "Ended abruptly", "No shutdown: a power cut, a forced power-off or a freeze."
+}
 
-	above := make([]string, w)
-	for c := range above {
-		above[c] = " "
+// facts is the line under the verdict: how long, how long asleep, the silence before the end.
+func (m *model) facts(r *analyze.Result, w int) string {
+	parts := []string{report.Length(r)}
+	switch k := r.Verdict.Kind; {
+	case k.Clean():
+		parts = append(parts, strings.SplitN(r.Verdict.Summary, " at ", 2)[0]+" at "+r.Boot.Last.Format("15:04"))
+	case r.Quiet > 0:
+		parts = append(parts, "nothing abnormal after "+r.Boot.Last.Add(-r.Quiet).Format("15:04"))
 	}
-	free := func(x, n int) bool {
-		for i := max(0, x-1); i < min(w, x+n+1); i++ {
-			if above[i] != " " {
-				return false
-			}
-		}
-		return x >= 0 && x+n <= w
+	if g := r.Gap(); g > 0 && !r.Verdict.Kind.Clean() {
+		parts = append(parts, "next boot "+analyze.Duration(g)+" later")
 	}
-	marked := make([]bool, w)
-	for _, ev := range r.Findings {
-		if ev.Rule.Level < rules.Warn {
-			continue
+	sep := stGray.Render(" · ")
+	out := stDim.Render(parts[0])
+	for _, p := range parts[1:] { // whole parts only
+		if lipgloss.Width(out)+3+lipgloss.Width(p) > w {
+			break
 		}
-		c := col(ev.First)
-		st := levelStyle(ev.Rule.Level)
-		if c > 0 && c < w-1 && !marked[c] { // findings come most serious first: keep its colour
-			cells[c] = st.Render("┼")
-			marked[c] = true
-		}
-		label := ev.First.Format("15:04")
-		x := max(0, min(w-len(label), c-2))
-		said := label == from.Format("15:04") || label == to.Format("15:04") // already under the axis
-		if !said && free(x, len(label)) {
-			for i, ch := range label {
-				above[x+i] = st.Render(string(ch))
-			}
-		}
+		out += sep + stDim.Render(p)
 	}
-
-	below := make([]string, w)
-	for c := range below {
-		below[c] = " "
-	}
-	put := func(x int, s string, st lipgloss.Style) { // where it fits and the cells are free
-		n := len([]rune(s))
-		if x < 0 || x+n > w {
-			return
-		}
-		for i := x; i < x+n; i++ {
-			if below[i] != " " {
-				return
-			}
-		}
-		for i, ch := range []rune(s) {
-			below[x+i] = st.Render(string(ch))
-		}
-	}
-	put(0, from.Format("15:04"), stDim)
-	endLabel := to.Format("15:04")
-	if r.Current {
-		endLabel = "now"
-	}
-	put(w-len(endLabel), endLabel, endSt)
-	for _, sl := range r.Sleeps { // label each sleep long enough to hold it
-		a, b := col(sl.From), col(sl.To)
-		lbl := "suspended " + analyze.Duration(sl.To.Sub(sl.From))
-		if sl.Hibernate {
-			lbl = "hibernated " + analyze.Duration(sl.To.Sub(sl.From))
-		}
-		if b-a > len(lbl)+2 {
-			put(a+(b-a-len(lbl))/2, lbl, stGray)
-		}
-	}
-	return []string{strings.Join(above, ""), strings.Join(cells, ""), strings.Join(below, "")}
+	return out
 }
 
 // ---- problems, bottom right ----
 
 func (m *model) problemsPanel(res *analyze.Result, w, h int) []string {
 	inner := w - 4
+	focused := m.focus == focusProblems
 	if h < 5 {
 		return nil
 	}
 	if res == nil {
-		return frame(nil, w, h, "Problems", m.focus == focusProblems)
+		return frame(nil, w, h, "Problems", focused)
 	}
 	var lines []string
 	if len(res.Findings) == 0 {
-		lines = append(lines, "No problems recognised in this session.")
+		lines = append(lines, stDim.Render("No problems recognised in this session."))
 	} else {
-		lines = append(lines, stGray.Bold(true).Render(spread(pad("TIME", 11)+pad("LEVEL", 7)+"WHAT", "TIMES", inner)))
+		lines = append(lines, "  "+stGray.Render(spread(pad("TIME", 13)+pad("LEVEL", 9)+"WHAT", "TIMES", inner-2)))
 		var rows []string
+		var owner []int // the problem each row belongs to
 		selStart, selLen := 0, 1
 		for i, ev := range res.Findings {
-			r := m.problemRows(res, ev, i == m.selP, inner)
+			r := m.problemRows(res, ev, i == m.selP, focused, inner)
 			if i == m.selP {
 				selStart, selLen = len(rows), len(r)
 			}
 			rows = append(rows, r...)
+			for range r {
+				owner = append(owner, i)
+			}
 		}
-		listH := min(len(rows), max(4, (h-4)/2))
+		area := h - 2 - 1 - 1 - detailHeight // frame, column names, separator, detail
+		listH := area
+		if len(rows) > area {
+			listH = area - 1 // a line to say what is out of sight
+		}
 		m.offP = scrollTo(m.offP, selStart, selLen, listH)
-		lines = append(lines, window(rows, m.offP, listH)...)
-		lines = append(lines, "")
-		lines = append(lines, m.problemDetail(res, res.Findings[min(m.selP, len(res.Findings)-1)], inner, h-2-len(lines)-1)...)
+		off := max(0, min(m.offP, len(rows)-listH))
+		lines = append(lines, window(rows, off, listH)...)
+		if len(rows) > area {
+			var more []string
+			if off > 0 {
+				more = append(more, fmt.Sprintf("↑ %d above", owner[off-1]+1))
+			}
+			if end := off + listH; end < len(rows) {
+				more = append(more, fmt.Sprintf("↓ %d more", len(res.Findings)-owner[end]))
+			}
+			lines = append(lines, "  "+stGray.Render(strings.Join(more, "  ")))
+		}
+		for len(lines) < 1+area {
+			lines = append(lines, "")
+		}
+		lines = append(lines, stGray.Render(strings.Repeat("┄", inner)))
+		lines = append(lines, m.problemDetail(res, res.Findings[min(m.selP, len(res.Findings)-1)], inner, detailHeight)...)
 	}
-	for len(lines) < h-3 {
-		lines = append(lines, "")
-	}
-	lines = lines[:h-3]
-	lines = append(lines, fit(bottomLine(res), inner))
-	return frame(lines, w, h, problemsTitle(res), m.focus == focusProblems)
+	return frameNote(lines, w, h, problemsTitle(res), problemsNote(res), focused)
 }
 
 // problemsTitle counts by level, so ten harmless notes don't read as ten problems.
 func problemsTitle(r *analyze.Result) string {
-	if len(r.Findings) == 0 {
-		return "Problems"
-	}
 	var parts []string
 	for _, l := range []rules.Level{rules.Err, rules.Warn, rules.Info} {
 		if n := r.Count(l); n > 0 {
-			parts = append(parts, fmt.Sprintf("%d %s", n, l))
+			word := l.Word()
+			if l != rules.Info {
+				word = report.Plural(n, word)[len(fmt.Sprint(n))+1:]
+			}
+			parts = append(parts, levelStyle(l).Render(fmt.Sprintf("%d %s", n, word)))
 		}
 	}
-	return "Problems: " + strings.Join(parts, ", ")
+	title := stBold.Render("Problems")
+	if len(parts) > 0 {
+		title += "  " + strings.Join(parts, stGray.Render(" · "))
+	}
+	return title
+}
+
+// problemsNote says what the list doesn't show: harmless lines, and lines no rule recognised.
+func problemsNote(r *analyze.Result) string {
+	var parts []string
+	if r.HiddenLines > 0 {
+		parts = append(parts, stGray.Render(report.Plural(r.HiddenLines, "harmless line")+" hidden"))
+	}
+	if n := r.UnknownErr + r.UnknownW; n > 0 {
+		what := "other warnings"
+		if r.UnknownErr > 0 {
+			what = "other warnings and errors"
+		}
+		if n == 1 {
+			what = strings.TrimSuffix(strings.Replace(what, "warnings and errors", "warning or error", 1), "s")
+		}
+		parts = append(parts, stGray.Render(fmt.Sprintf("%d %s: ", n, what))+stBold.Render("W"))
+	}
+	return strings.Join(parts, stGray.Render(" · "))
+}
+
+// when writes a moment of the session for the problem list: the time alone when the session
+// fits in one day, else with the same day words as the sessions list on every row ("yest. 18:49",
+// "today 10:53"), so rows of different days can't be mistaken.
+func (m *model) when(r *analyze.Result, t time.Time) string {
+	y1, m1, d1 := r.Boot.First.Date()
+	y2, m2, d2 := r.Boot.Last.Date()
+	if y1 == y2 && m1 == m2 && d1 == d2 {
+		return t.Format("15:04")
+	}
+	if len(m.src.Boots) == 0 { // a recorded journal: "today" would be wrong
+		return t.Format("Mon 15:04")
+	}
+	return report.WhenShort(t)
 }
 
 // problemRows is a problem's line in the table; the selected one continues on more lines when
 // its title doesn't fit, so every title can be read in full.
-func (m *model) problemRows(r *analyze.Result, ev *rules.Event, sel bool, w int) []string {
-	when := pad(report.Within(ev.First, r.Boot.Last), 11)
-	level := pad(ev.Rule.Level.String(), 7)
+func (m *model) problemRows(r *analyze.Result, ev *rules.Event, sel, focused bool, w int) []string {
+	when := pad(m.when(r, ev.First), 13)
+	level := pad(ev.Rule.Level.Word(), 9)
 	count := fmt.Sprint(ev.Count)
-	const lead = 18 // when + level
-	room := w - lead - 6
+	const lead = 2 + 13 + 9 // mark, when, level
+	room := w - lead - 5
 	title := []string{fit(ev.Title, room)}
 	if sel && ansi.StringWidth(ev.Title) > room {
 		title = wrap(ev.Title, room)
 	}
+	whenSt, textSt, countSt := stDim, stPlain, stDim
+	if sel {
+		whenSt, textSt, countSt = stBold, stBold, stBold
+	}
 	var out []string
 	for i, t := range title {
-		left := when + level + t
-		right := count
 		if i > 0 {
-			left, right = strings.Repeat(" ", lead)+t, ""
+			out = append(out, strings.Repeat(" ", lead)+textSt.Render(t))
+			continue
 		}
-		switch {
-		case sel && m.focus == focusProblems:
-			out = append(out, stSel.Render(spread(left, right, w)))
-		case sel:
-			out = append(out, stSelBlur.Render(spread(left, right, w)))
-		case ev.Rule.Level <= rules.Info: // notes: present, but quieter than problems
-			out = append(out, stDim.Render(spread(left, right, w)))
-		default:
-			out = append(out, spread(when+levelStyle(ev.Rule.Level).Render(level)+t, stDim.Render(right), w))
-		}
+		left := mark(sel, focused) + whenSt.Render(when) + levelStyle(ev.Rule.Level).Render(level) + textSt.Render(t)
+		out = append(out, spread(left, countSt.Render(count), w))
 	}
 	return out
 }
 
-// problemDetail is what is known about the selected problem: the facts, then what it means.
+// problemDetail is what is known about the selected problem: what it means, then the facts.
 // The title is already on the selected row, so it isn't repeated.
 func (m *model) problemDetail(r *analyze.Result, ev *rules.Event, w, h int) []string {
-	var out []string
+	var facts []string
 	fact := func(label, value string) {
-		out = append(out, stDim.Render(pad(label, 9))+fit(value, w-9))
+		facts = append(facts, stGray.Render(pad(label, 9))+stDim.Render(fit(value, w-9)))
 	}
 	if o := r.OOMOf(ev); o != nil {
 		fact("killed", killedList(o))
@@ -434,17 +426,13 @@ func (m *model) problemDetail(r *analyze.Result, ev *rules.Event, w, h int) []st
 		}
 		fact("largest", strings.Join(top, ", "))
 	} else if d := report.Detail(r, ev); d != "" {
-		out = append(out, fit(d, w))
+		facts = append(facts, stDim.Render(fit(d, w)))
 	}
-	if ev.Rule.Explain != "" && h-len(out) > 1 {
-		if len(out) > 0 {
-			out = append(out, "")
-		}
-		for _, l := range sentencesThatFit(joinParagraphs(ev.Rule.Explain), w, h-len(out)) {
-			out = append(out, stDim.Render(l))
-		}
+	var out []string
+	if ev.Rule.Explain != "" {
+		out = sentencesThatFit(joinParagraphs(ev.Rule.Explain), w, h-len(facts))
 	}
-	return out[:min(len(out), max(0, h))]
+	return append(out, facts...)[:min(len(out)+len(facts), max(0, h))]
 }
 
 func killedList(o *analyze.OOMReport) string {
@@ -490,20 +478,4 @@ func sentencesThatFit(text string, w, h int) []string {
 		return nil // not even one whole sentence fits: better nothing than half of one
 	}
 	return wrap(best, w)
-}
-
-// bottomLine says what the problems list doesn't show: lines no rule recognised, hidden lines.
-func bottomLine(r *analyze.Result) string {
-	var parts []string
-	if n := r.UnknownErr + r.UnknownW; n > 0 {
-		s := fmt.Sprintf("%d not recognised", n)
-		if r.UnknownErr > 0 {
-			s += fmt.Sprintf(" (%d err)", r.UnknownErr)
-		}
-		parts = append(parts, stDim.Render(s)+stGray.Render(", press W"))
-	}
-	if r.HiddenLines > 0 {
-		parts = append(parts, stGray.Render(fmt.Sprintf("%d hidden", r.HiddenLines)))
-	}
-	return strings.Join(parts, stGray.Render("   "))
 }

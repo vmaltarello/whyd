@@ -60,10 +60,10 @@ func TestMarkdown(t *testing.T) {
 	}
 	out := b.String()
 	for _, want := range []string{
-		"- **end:** no shutdown, journal stops at 12:11:56; nothing abnormal logged after 11:57",
+		"- **end:** abrupt end, journal stops at 12:11:56; nothing abnormal logged after 11:57",
 		"- **before:** 10:53 out of memory, 4 processes killed; sunshine killed by SIGTRAP",
-		"| err | out of memory, 4 processes killed (procs 6.0G, shmem 4.4G, gpu 7.5G, swap ",
-		"| warn | sunshine killed by SIGTRAP",
+		"| error | out of memory, 4 processes killed (procs 6.0G, shmem 4.4G, gpu 7.5G, swap ",
+		"| warning | sunshine killed by SIGTRAP",
 		"quiet for 14m before the end",
 		"Largest processes",
 		"### Last lines",
@@ -86,7 +86,8 @@ func TestText(t *testing.T) {
 	}
 	out := b.String()
 	for _, want := range []string{
-		"end     no shutdown, journal stops at 12:11:56",
+		"end     abrupt end, journal stops at 12:11:56",
+		"other   253 warnings no rule recognises, in 44 different messages",
 		"        nothing abnormal logged after 11:57",
 		"before  10:53 out of memory, 4 processes killed; sunshine killed by SIGTRAP",
 	} {
@@ -155,7 +156,7 @@ func TestMarkdownRedactsSources(t *testing.T) {
 	if strings.Contains(out, "| user |") || strings.Contains(out, " user: done") {
 		t.Errorf("source not redacted:\n%s", out)
 	}
-	if !strings.Contains(out, "| err | 1 | [user] | a \\| b ``` c |") || !strings.Contains(out, "\n````\n") {
+	if !strings.Contains(out, "| error | 1 | [user] | a \\| b ``` c |") || !strings.Contains(out, "\n````\n") {
 		t.Errorf("table cell or code fence wrong:\n%s", out)
 	}
 }

@@ -40,19 +40,19 @@ func Text(w io.Writer, r *analyze.Result) error {
 		for _, ev := range r.Findings {
 			tw = max(tw, utf8.RuneCountInString(WhenShort(ev.First))+1)
 		}
-		p("%-*s %-6s %-52s %s\n", tw, "TIME", "LEVEL", "WHAT", "TIMES")
+		p("%-*s %-7s %-52s %s\n", tw, "TIME", "LEVEL", "WHAT", "TIMES")
 		for _, ev := range r.Findings {
 			what := ev.Title
-			p("%-*s %-6s %s%s%d\n", tw, WhenShort(ev.First), ev.Rule.Level, what,
+			p("%-*s %-7s %s%s%d\n", tw, WhenShort(ev.First), ev.Rule.Level.Word(), what,
 				strings.Repeat(" ", max(1, 53-utf8.RuneCountInString(what))), ev.Count)
 			if d := Detail(r, ev); d != "" {
-				p("%*s%s\n", tw+8, "", d)
+				p("%*s%s\n", tw+9, "", d)
 			}
 		}
 	}
 	p("\n")
-	if n := r.UnknownErr + r.UnknownW; n > 0 {
-		p("unknown %d warning and error lines matched no rule (%d errors, %d messages)\n", n, r.UnknownErr, len(r.Unknown))
+	if o := Others(r); o != "" {
+		p("other   %s\n", o)
 	}
 	if n := HiddenSummary(r); n != "" {
 		p("hidden  %s\n", n)
@@ -67,6 +67,22 @@ func Text(w io.Writer, r *analyze.Result) error {
 	}
 	p("%-7s %s\n", label, strings.Join(facts, ", "))
 	return werr
+}
+
+// Others says what no rule recognised: "253 warnings no rule recognises, in 44 different
+// messages", "" when there are none.
+func Others(r *analyze.Result) string {
+	if r.UnknownErr+r.UnknownW == 0 {
+		return ""
+	}
+	var what []string
+	if r.UnknownErr > 0 {
+		what = append(what, Plural(r.UnknownErr, "error"))
+	}
+	if r.UnknownW > 0 {
+		what = append(what, Plural(r.UnknownW, "warning"))
+	}
+	return strings.Join(what, " and ") + " no rule recognises, in " + Plural(len(r.Unknown), "different message")
 }
 
 // Plural writes "1 suspend", "2 suspends".

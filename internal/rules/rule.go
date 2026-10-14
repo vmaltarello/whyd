@@ -37,8 +37,13 @@ const (
 
 var levelNames = [...]string{"hidden", "context", "info", "warn", "err"}
 
-// String is the level as rules write it and whyd shows it: "err", "warn", "info"…
+// String is the level as rules write it: "err", "warn", "info"…
 func (l Level) String() string { return levelNames[l] }
+
+var levelWords = [...]string{"hidden", "context", "info", "warning", "error"}
+
+// Word is the level as whyd shows it to people: "error", "warning", "info"…
+func (l Level) Word() string { return levelWords[l] }
 
 // Rule recognises one kind of problem, compiled from its [[rule]] block.
 type Rule struct {

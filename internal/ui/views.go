@@ -137,19 +137,19 @@ func (m *model) linesView() string {
 		items = append(items, item{stDim.Render(prefix) + e.Message, prefix + e.Message, len(prefix), 0})
 	}
 	title := fmt.Sprintf("Journal lines: %s  (%s)", ev.Title, report.Plural(len(ev.Entries), "line"))
-	return m.listView(title, "", items, [][2]string{{"Esc", "Back"}})
+	return m.listView(title, "", "", items, [][2]string{{"esc", "back"}})
 }
 
 // ---- the last minutes ----
 
 func (m *model) tailView() string {
 	res, _ := m.cur()
-	title := fmt.Sprintf("Last %s of the %s, before %s", analyze.Duration(m.window), report.SessionName(res), report.When(res.Boot.Last))
-	hidden := "Show hidden"
+	title := stBold.Render("Last "+analyze.Duration(m.window)) + "  " + stDim.Render("before "+report.When(res.Boot.Last))
+	hidden := "show harmless"
 	if m.showHidden {
-		hidden = "Fold hidden"
+		hidden = "fold harmless"
 	}
-	return m.listView(title, "", m.tailItems(res), [][2]string{{"Enter", "Open block"}, {"+-", "Window"}, {"N", hidden}, {"Esc", "Back"}})
+	return m.listView(title, "", "", m.tailItems(res), [][2]string{{"enter", "open"}, {"+ -", "window"}, {"N", hidden}, {"esc", "back"}})
 }
 
 // tailItems builds the lines of the tail view, once for each session, window and folding: the
@@ -172,9 +172,9 @@ func (m *model) tailItems(res *analyze.Result) []item {
 			n += g.Count
 		}
 		open := m.openHidden[block]
-		t := fmt.Sprintf("%13s… %s, Enter to show", "", report.Plural(n, "hidden line"))
+		t := fmt.Sprintf("%13s▸ %s", "", report.Plural(n, "harmless line"))
 		if open {
-			t = fmt.Sprintf("%13s… %s, Enter to fold", "", report.Plural(n, "hidden line"))
+			t = fmt.Sprintf("%13s▾ %s", "", report.Plural(n, "harmless line"))
 		}
 		items = append(items, item{stGray.Render(t), t, 0, block})
 		if open {
@@ -197,15 +197,18 @@ func (m *model) tailItems(res *analyze.Result) []item {
 		items = append(items, m.tailItem(g, st))
 	}
 	flush()
-	end := "journal ends " + res.Boot.Last.Format("15:04:05")
-	if g := res.Gap(); g > 0 {
-		end += ", next boot after " + analyze.Duration(g)
+	end := "the journal stops at " + res.Boot.Last.Format("15:04:05")
+	if res.Verdict.Kind.Clean() {
+		end = res.Verdict.Summary
 	}
 	if q := report.QuietLine(res); q != "" {
-		end += "; " + q
+		end += " · " + q
+	}
+	if g := res.Gap(); g > 0 {
+		end += " · next boot " + analyze.Duration(g) + " later"
 	}
 	endSt := endStyle(res.Verdict.Kind)
-	items = append(items, item{endSt.Render("-- " + end + " --"), end, 3, 0})
+	items = append(items, item{endSt.Render("── " + end), end, 3, 0})
 	m.tailKey, m.tailCache = key, items
 	return items
 }
@@ -214,7 +217,7 @@ func (m *model) tailItems(res *analyze.Result) []item {
 func (m *model) tailItem(g analyze.TailGroup, st lipgloss.Style) item {
 	mark := " "
 	if g.Matched {
-		mark = stYellowB.Render("*")
+		mark = stYellow.Render("*")
 	}
 	count := ""
 	if g.Count > 1 {
@@ -249,12 +252,12 @@ func (m *model) reportView() string {
 			lines = append(lines, fit(l, m.w-4))
 		}
 	}
-	title := "Report, redacted"
-	redact := "Show all"
+	title := stBold.Render("Report") + "  " + stDim.Render("redacted: no addresses, host, user or Wi-Fi names")
+	redact := "show unredacted"
 	if !m.redacted {
-		title, redact = "Report, NOT redacted", "Redact"
+		title, redact = stBold.Render("Report")+"  "+stRed.Render("NOT redacted: addresses and names included"), "redact"
 	}
-	return m.fullScreen(title, lines, [][2]string{{"↑↓", "Scroll"}, {"X", redact}, {"Y", "Copy"}, {"S", "Save"}, {"Esc", "Back"}})
+	return m.fullScreen(title, lines, [][2]string{{"↑↓", "scroll"}, {"Y", "copy"}, {"S", "save"}, {"X", redact}, {"esc", "back"}})
 }
 
 // copyCmd puts text on the clipboard: with wl-copy or xclip when the session has a display for
@@ -285,28 +288,49 @@ func copyCmd(text string) tea.Cmd {
 // ---- help ----
 
 func (m *model) helpView() string {
-	rows := [][2]string{
-		{"↑ ↓", "move in the focused panel or list"},
-		{"← →", "sessions panel / problems panel"},
-		{"Enter", "on a problem: its journal lines; on \"older\": 30 more days of sessions"},
-		{"L", "the last minutes of the session"},
-		{"R", "the report to paste on a forum (X redaction, Y copy, S save)"},
-		{"W", "warnings and errors no rule recognised"},
-		{"U", "only sessions without a clean shutdown"},
-		{"/", "in a list: search"},
-		{"Esc", "clear the search, then back"},
-		{"Q", "quit"},
-		{"", ""},
-		{"err", "can explain a crash or a freeze by itself"},
-		{"warn", "worth a look"},
-		{"info", "context, known and harmless issues"},
+	section := func(name string) string { return stGray.Render(strings.ToUpper(name)) }
+	key := func(k, what string, kw int) string { return "  " + stBold.Render(pad(k, kw)) + what }
+	moving := []string{
+		section("moving around"), "",
+		key("↑ ↓", "move in the list", 8),
+		key("← →", "sessions / problems", 8),
+		key("enter", "a problem's journal lines", 8),
+		key("/", "search in a list", 8),
+		key("esc", "clear the search, then back", 8),
+		key("q", "quit", 8),
 	}
+	views := []string{
+		section("views"), "",
+		key("L", "the last minutes of the session", 4),
+		key("R", "the report to paste on a forum", 4),
+		key("W", "warnings no rule recognises", 4),
+		key("U", "only sessions without a clean shutdown", 4),
+	}
+	half := (m.w - 4) / 2
 	var lines []string
-	for _, r := range rows {
-		lines = append(lines, stBold.Render(pad(r[0], 8))+r[1])
+	for i := range max(len(moving), len(views)) {
+		l, r := "", ""
+		if i < len(moving) {
+			l = moving[i]
+		}
+		if i < len(views) {
+			r = views[i]
+		}
+		lines = append(lines, pad(l, half)+r)
 	}
-	lines = append(lines, "", stDim.Render("Rules: built in, plus ~/.config/whyd/rules/*.toml"))
-	return m.fullScreen("Help", lines, [][2]string{{"any key", "Back"}})
+	word := func(st lipgloss.Style, w, what string) string { return "  " + st.Render(pad(w, 16)) + what }
+	lines = append(lines, "", stGray.Render(strings.Repeat("┄", m.w-4)), "", section("how a session ended"), "",
+		word(stGreen, "shut down", "turned off from the system: a normal end"),
+		word(stGreen, "restarted", "restarted from the system: a normal end"),
+		word(stRed, "abrupt end", "no shutdown: a power cut, a held power button, or a freeze"),
+		word(stRed, "never woke up", "suspended or hibernated, and never resumed"),
+		word(stRed, "kernel panic", "the kernel stopped on an error it could not survive"),
+		"", section("levels"), "",
+		word(stRed, "error", "can explain a crash or a freeze by itself"),
+		word(stYellow, "warning", "worth a look"),
+		word(stDim, "info", "context, known and harmless issues"),
+		"", stGray.Render("Rules: built in, plus ~/.config/whyd/rules/*.toml"))
+	return m.fullScreen("Help", lines, [][2]string{{"any key", "back"}})
 }
 
 // ---- lines no rule recognised ----
@@ -315,15 +339,16 @@ func (m *model) unknownView() string {
 	res, _ := m.cur()
 	var items []item
 	for _, g := range res.Unknown {
-		prio, st := "warning", stYellowB // the priority the program logged it with
+		prio, st := "warning", stYellow // the priority the program logged it with
 		if g.Priority <= 3 {
-			prio, st = "err", stRedB
+			prio, st = "error", stRed
 		}
-		head := st.Render(pad(prio, 10)) + stDim.Render(pad(fmt.Sprint(g.Count), 7)) + pad(report.Within(g.First, res.Boot.Last), 11) +
+		head := stDim.Render(fmt.Sprintf("%5d  ", g.Count)) + stDim.Render(pad(m.when(res, g.First), 13)) + st.Render(pad(prio, 9)) +
 			stCyan.Render(pad(g.Source, 15)) + " "
-		items = append(items, item{head + g.Message, prio + " " + g.Source + " " + g.Message, 44, 0})
+		items = append(items, item{head + g.Message, prio + " " + g.Source + " " + g.Message, 45, 0})
 	}
-	header := pad("PRIORITY", 10) + pad("TIMES", 7) + pad("FIRST", 11) + pad("SOURCE", 16) + "MESSAGE"
-	title := fmt.Sprintf("Not recognised: %d errors, %d warnings, %d messages", res.UnknownErr, res.UnknownW, len(res.Unknown))
-	return m.listView(title, header, items, [][2]string{{"Esc", "Back"}})
+	header := fmt.Sprintf("%5s  ", "TIMES") + pad("FIRST", 13) + pad("LEVEL", 9) + pad("PROGRAM", 16) + "MESSAGE"
+	title := stBold.Render("Other warnings") + "  " + stDim.Render(report.Plural(res.UnknownErr+res.UnknownW, "line")+", "+report.Plural(len(res.Unknown), "different message"))
+	note := stGray.Render("a rule for one of them: docs/RULES.md")
+	return m.listView(title, header, note, items, [][2]string{{"esc", "back"}})
 }
