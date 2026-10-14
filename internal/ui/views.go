@@ -130,7 +130,7 @@ func (m *model) fullScreen(title string, lines []string, keys [][2]string) strin
 
 func (m *model) linesView() string {
 	res, _ := m.cur()
-	ev := res.Findings[min(m.selP, len(res.Findings)-1)]
+	ev := m.selectedProblem(res)
 	var items []item
 	for _, e := range ev.Entries {
 		prefix := e.Time.Format("15:04:05") + " " + e.Source + ": "
@@ -295,6 +295,7 @@ func (m *model) helpView() string {
 		key("↑ ↓", "move in the list", 8),
 		key("← →", "sessions / problems", 8),
 		key("enter", "a problem's journal lines", 8),
+		key("T", "problems by importance / by time", 8),
 		key("/", "search in a list", 8),
 		key("esc", "clear the search, then back", 8),
 		key("q", "quit", 8),

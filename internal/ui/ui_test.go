@@ -324,3 +324,30 @@ func TestSaveNeverOverwrites(t *testing.T) {
 		t.Errorf("first file overwritten: %q", b)
 	}
 }
+
+// T orders the problems by time, with the session's moments between them, and back; the same
+// problem stays selected.
+func TestByTime(t *testing.T) {
+	m := recorded(t)
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	press(m, "right", "down")
+	res, _ := m.cur()
+	want := m.selectedProblem(res)
+	press(m, "t")
+	if !m.byTime || m.selectedProblem(res) != want {
+		t.Fatalf("T should keep %q selected", want.Title)
+	}
+	out := ansi.Strip(m.View().Content)
+	for _, s := range []string{"by time", "── started · kernel", "── went to sleep", "── woke up after 10h38m", "── the journal stops, with no shutdown"} {
+		if !strings.Contains(out, s) {
+			t.Errorf("by time: %q not shown", s)
+		}
+	}
+	if strings.Index(out, "went to sleep") > strings.Index(out, "woke up") {
+		t.Error("moments out of order")
+	}
+	press(m, "t")
+	if m.byTime || m.selectedProblem(res) != want {
+		t.Error("a second T should go back, keeping the selection")
+	}
+}

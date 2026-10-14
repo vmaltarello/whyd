@@ -14,6 +14,7 @@ import (
 	"github.com/vmaltarello/whyd/internal/analyze"
 	"github.com/vmaltarello/whyd/internal/journal"
 	"github.com/vmaltarello/whyd/internal/report"
+	"github.com/vmaltarello/whyd/internal/rules"
 )
 
 // Recent is how far back the sessions list goes at first; each "older" step adds as much again.
@@ -86,7 +87,8 @@ type model struct {
 	selS, offS int // sessions panel
 	onlyBad    bool
 	focus      int
-	selP, offP int // problems panel
+	selP, offP int  // problems panel
+	byTime     bool // problems in time order, with the session's moments between them
 
 	view       view
 	shown      []item // the items of the list view on screen, after the search filter
@@ -360,11 +362,35 @@ func (m *model) key(k string) tea.Cmd {
 		if res != nil && len(res.Unknown) > 0 {
 			m.openList(vUnknown, false)
 		}
+	case "t", "T":
+		if res != nil && len(res.Findings) > 0 {
+			ev := m.problems(res)[min(m.selP, len(res.Findings)-1)]
+			m.byTime = !m.byTime
+			m.selP, m.offP = slices.Index(m.problems(res), ev), 0 // the same problem stays selected
+		}
 	case "u", "U":
 		m.onlyBad = !m.onlyBad
 		m.selS, m.offS, m.selP, m.offP, m.focus = 0, 0, 0, 0, focusSessions
 	}
 	return m.full()
+}
+
+// problems is the problem list in the order shown: most serious first, or by time with T.
+func (m *model) problems(r *analyze.Result) []*rules.Event {
+	if !m.byTime {
+		return r.Findings
+	}
+	out := slices.Clone(r.Findings)
+	slices.SortStableFunc(out, func(a, b *rules.Event) int { return a.First.Compare(b.First) })
+	return out
+}
+
+// selectedProblem is the selected problem, nil when the session has none.
+func (m *model) selectedProblem(r *analyze.Result) *rules.Event {
+	if len(r.Findings) == 0 {
+		return nil
+	}
+	return m.problems(r)[min(m.selP, len(r.Findings)-1)]
 }
 
 // onOlder tells whether the "older sessions" row is selected.

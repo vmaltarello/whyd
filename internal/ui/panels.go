@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -71,7 +72,11 @@ func (m *model) mainView() string {
 	}
 	keys := [][2]string{{"↑↓", "move"}, {"→", "problems"}, {"L", "last minutes"}, {"R", "report"}, {"U", only}, {"?", "help"}, {"q", "quit"}}
 	if m.focus == focusProblems {
-		keys = [][2]string{{"↑↓", "move"}, {"←", "sessions"}, {"enter", "journal lines"}, {"L", "last minutes"}, {"R", "report"}, {"?", "help"}, {"q", "quit"}}
+		order := "by time"
+		if m.byTime {
+			order = "by importance"
+		}
+		keys = [][2]string{{"↑↓", "move"}, {"←", "sessions"}, {"enter", "journal lines"}, {"T", order}, {"L", "last minutes"}, {"R", "report"}, {"?", "help"}}
 	}
 	return strings.Join(append(lines, m.keyBar(keys)), "\n")
 }
@@ -290,9 +295,15 @@ func (m *model) problemsPanel(res *analyze.Result, w, h int) []string {
 	} else {
 		lines = append(lines, "  "+stGray.Render(spread(pad("TIME", 13)+pad("LEVEL", 9)+"WHAT", "TIMES", inner-2)))
 		var rows []string
-		var owner []int // the problem each row belongs to
+		var owner []int // the problem each row belongs to; a moment belongs to the next one
 		selStart, selLen := 0, 1
-		for i, ev := range res.Findings {
+		list := m.problems(res)
+		moments := m.moments(res)
+		for i, ev := range list {
+			for len(moments) > 0 && !moments[0].at.After(ev.First) {
+				rows, owner = append(rows, momentRow(res, moments[0], m, inner)), append(owner, i)
+				moments = moments[1:]
+			}
 			r := m.problemRows(res, ev, i == m.selP, focused, inner)
 			if i == m.selP {
 				selStart, selLen = len(rows), len(r)
@@ -301,6 +312,12 @@ func (m *model) problemsPanel(res *analyze.Result, w, h int) []string {
 			for range r {
 				owner = append(owner, i)
 			}
+		}
+		for _, mo := range moments {
+			rows, owner = append(rows, momentRow(res, mo, m, inner)), append(owner, len(list))
+		}
+		if m.selP == len(list)-1 { // the last problem: show how the session ended after it
+			selLen = len(rows) - selStart
 		}
 		area := h - 2 - 1 - 1 - detailHeight // frame, column names, separator, detail
 		listH := area
@@ -315,8 +332,8 @@ func (m *model) problemsPanel(res *analyze.Result, w, h int) []string {
 			if off > 0 {
 				more = append(more, fmt.Sprintf("↑ %d above", owner[off-1]+1))
 			}
-			if end := off + listH; end < len(rows) {
-				more = append(more, fmt.Sprintf("↓ %d more", len(res.Findings)-owner[end]))
+			if end := off + listH; end < len(rows) && owner[end] < len(list) {
+				more = append(more, fmt.Sprintf("↓ %d more", len(list)-owner[end]))
 			}
 			lines = append(lines, "  "+stGray.Render(strings.Join(more, "  ")))
 		}
@@ -324,9 +341,56 @@ func (m *model) problemsPanel(res *analyze.Result, w, h int) []string {
 			lines = append(lines, "")
 		}
 		lines = append(lines, stGray.Render(strings.Repeat("┄", inner)))
-		lines = append(lines, m.problemDetail(res, res.Findings[min(m.selP, len(res.Findings)-1)], inner, detailHeight)...)
+		lines = append(lines, m.problemDetail(res, m.selectedProblem(res), inner, detailHeight)...)
 	}
-	return frameNote(lines, w, h, problemsTitle(res), problemsNote(res), focused)
+	title := problemsTitle(res)
+	if m.byTime {
+		title += "  " + stBold.Render("by time")
+	}
+	return frameNote(lines, w, h, title, problemsNote(res), focused)
+}
+
+// moment is something that happened to the session itself: it started, slept, woke up, ended
+// (the silence before an abrupt end is already a problem in the list). In time order they go between the problems and tell the story around them.
+type moment struct {
+	at   time.Time
+	text string
+	st   lipgloss.Style
+}
+
+func (m *model) moments(r *analyze.Result) []moment {
+	if !m.byTime {
+		return nil
+	}
+	start := "started"
+	if r.Kernel != "" {
+		start += " · kernel " + r.Kernel
+	}
+	out := []moment{{r.Boot.First, start, stDim}}
+	for _, sl := range r.Sleeps {
+		what := "went to sleep"
+		if sl.Hibernate {
+			what = "hibernated"
+		}
+		out = append(out, moment{sl.From, what, stDim})
+		if sl.To.Before(r.Boot.Last) || r.Verdict.Kind != analyze.EndAsleep {
+			out = append(out, moment{sl.To, "woke up after " + analyze.Duration(sl.To.Sub(sl.From)), stDim})
+		}
+	}
+	end := map[analyze.EndKind]string{
+		analyze.EndRunning: "now", analyze.EndPowerOff: "shut down", analyze.EndReboot: "restarted",
+		analyze.EndShutdown: "shut down", analyze.EndAsleep: "never woke up", analyze.EndPanic: "kernel panic",
+		analyze.EndUnclean: "the journal stops, with no shutdown",
+	}[r.Verdict.Kind]
+	out = append(out, moment{r.Boot.Last, end, endStyle(r.Verdict.Kind)})
+	slices.SortStableFunc(out, func(a, b moment) int { return a.at.Compare(b.at) })
+	return out
+}
+
+// momentRow is a moment as a separator in the problem list: "today 10:08  ── woke up after 10h38m ──".
+func momentRow(r *analyze.Result, mo moment, m *model, w int) string {
+	left := "  " + stGray.Render(pad(m.when(r, mo.at), 13)) + mo.st.Render("── "+mo.text+" ")
+	return left + mo.st.Render(strings.Repeat("─", max(0, w-lipgloss.Width(left))))
 }
 
 // problemsTitle counts by level, so ten harmless notes don't read as ten problems.
