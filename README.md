@@ -15,34 +15,35 @@
 
 </div>
 
-whyd reads the journal of the previous boot and tells you, in one screen, how it ended and
+whyd reads the journal of the previous session and tells you, in one screen, how it ended and
 what went wrong before.
 
-![whyd: the sessions on the left, the selected one and its problems on the right](docs/screenshots/main.png)
+![whyd: the sessions on the left, how the selected one ended and its problems on the right, then a problem's journal lines, the last minutes and the report](docs/screenshots/whyd.gif)
 
 Your laptop froze, you held the power button, it came back up. The answer is in the journal,
-buried under thousands of lines of routine noise. whyd finds it:
+buried under thousands of harmless lines. whyd finds it:
 
 - **how it ended**: clean power-off or reboot, hard power-off, died asleep, kernel panic
 - **what went wrong before**: out-of-memory kills, GPU errors, crashes, failed services,
   hung tasks, overheating, disk errors, each with a short explanation
-- **the last minutes** of the session, with the hidden lines folded away
+  ([the full list](docs/RULES.md#built-in-rules))
+- **the last minutes** of the session, with the harmless lines folded away
 - **a report** to paste on a forum, with addresses, hostname, user and Wi-Fi names removed
 
-Works on any Linux distribution with systemd.
+`journalctl -b -1 -p err` shows dozens of harmless errors, and nothing at all when the power
+was cut: a hard power-off leaves no error behind. whyd tells the two apart, says how the
+session ended, and explains each problem.
+
+whyd only reads the journal: it doesn't go on the network, and on its own it writes nothing but
+a small cache of the sessions already read, in `~/.cache/whyd`.
 
 ## Install
-
-whyd is a single program with no dependencies besides systemd's `journalctl`. Pick the line
-for your system (the links always point to the latest release; for ARM replace `amd64` with
-`arm64`):
 
 ```sh
 # any distribution: downloads the latest release, checks it, installs to /usr/local/bin
 curl -fsSL https://raw.githubusercontent.com/vmaltarello/whyd/main/install.sh | sh
 
-# Arch Linux and derivatives (downloaded first: pacman wants a signature for a package
-# installed from a link, not for a local file)
+# Arch Linux and derivatives
 curl -fLO https://github.com/vmaltarello/whyd/releases/latest/download/whyd_linux_amd64.pkg.tar.zst
 sudo pacman -U ./whyd_linux_amd64.pkg.tar.zst
 
@@ -57,11 +58,17 @@ sudo dnf install https://github.com/vmaltarello/whyd/releases/latest/download/wh
 go install github.com/vmaltarello/whyd/cmd/whyd@latest
 ```
 
-Without sudo, the script installs to `~/.local/bin` with `... | PREFIX=~/.local sh`. To
-update, run the same line again.
+For ARM, replace `amd64` with `arm64`. Without sudo, the script installs to `~/.local/bin` with
+`... | PREFIX=~/.local sh`; to update, run the same line again.
 
-Reading the system journal needs a user in the `systemd-journal`, `adm` or `wheel` group
-(the first user usually is, on Ubuntu and Arch); otherwise run whyd with `sudo`.
+### Requirements
+
+- Linux with systemd: whyd is a single program and needs only `journalctl`.
+- A user in the `systemd-journal`, `adm` or `wheel` group (the first user usually is, on
+  Ubuntu and Arch); otherwise run whyd with `sudo`.
+- A journal kept on disk. If whyd finds only the current session even after a few reboots, the
+  journal is kept in memory and lost at every shutdown: `sudo mkdir -p /var/log/journal` and
+  reboot, and from then on whyd has the sessions to look at.
 
 ## Use
 
@@ -75,31 +82,17 @@ whyd rules           the rules in use, checked
 ```
 
 In the interface the arrows do everything: ↑ ↓ move, → and ← switch panel, `Enter` opens a
-problem's journal lines. `U` keeps only the sessions that didn't shut down cleanly, `L` shows
-the last minutes, `R` the report, `?` every key.
-
-<table>
-<tr>
-<td><img src="docs/screenshots/tail.png" alt="The last minutes before the end"></td>
-<td><img src="docs/screenshots/report.png" alt="The report, redacted"></td>
-</tr>
-<tr>
-<td align="center">The last minutes</td>
-<td align="center">The report</td>
-</tr>
-</table>
+problem's journal lines. Problems are listed by time, between the moments of the session
+(started, asleep, woke up, the end); `T` lists them by importance. `U` keeps only the sessions
+that ended badly, `L` shows the last minutes, `R` the report, `?` every key.
 
 ## Rules
 
 Problems are recognised by rules written in TOML, not code. Your own go in
-`~/.config/whyd/rules/` and can add to, change or turn off the built-in ones. Found a problem whyd
-didn't recognise? A rule with a real example line is the best contribution:
-see [docs/RULES.md](docs/RULES.md).
-
-## Documentation
-
-- [Rules](docs/RULES.md): the rule format and the built-in rules
-- [Contributing](CONTRIBUTING.md): building, testing, sending changes
+`~/.config/whyd/rules/` and can add to, change or turn off the built-in ones. Found a problem
+whyd didn't recognise? A rule with a real example line is the best contribution:
+[docs/RULES.md](docs/RULES.md) explains the format step by step, and
+[CONTRIBUTING.md](CONTRIBUTING.md) how to build, test and send changes.
 
 ## License
 

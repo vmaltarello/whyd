@@ -52,8 +52,7 @@ don't want to share before attaching it.
 - Commits: one line, conventional style (`feat:`, `fix:`, `docs:`, `test:`, `refactor:`).
 - On screen: short factual wording in plain words (error, warning, abrupt end), compact numbers
   (17h22m, 7.5G), terminal colours only and only where they mean something (red errors and bad
-  ends, yellow warnings, green clean ends), bold only for titles, verdicts and the selection,
-  no decorative symbols, keyboard only.
+  ends, yellow warnings), bold only for the verdict, no decorative symbols, keyboard only.
 
 ## Releases
 
