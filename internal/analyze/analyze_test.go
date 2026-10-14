@@ -52,6 +52,9 @@ func TestFreeze(t *testing.T) {
 	if r.Kernel != "7.2.9-arch1-1" {
 		t.Errorf("kernel %q", r.Kernel)
 	}
+	if got := r.Machine.Line(); got != "HUAWEI KLVL-WXX9, AMD Ryzen 5 4600H, 16 GB RAM, amdgpu" {
+		t.Errorf("machine %q", got)
+	}
 	if len(r.Users) != 1 || r.Users[0] != "user" { // greeter and root are system users
 		t.Errorf("users %q", r.Users)
 	}
@@ -315,5 +318,24 @@ title  = "oom, {process} killed"
 	}
 	if r.OOM == nil || r.OOM.AnonKB != 1000 {
 		t.Errorf("first report %+v", r.OOM)
+	}
+}
+
+// CPU and board names lose what says nothing; boot framebuffers are not the graphics card.
+func TestMachineNames(t *testing.T) {
+	var m Machine
+	for _, l := range []string{
+		"DMI: SMBIOS 3.3 present.",
+		"DMI: LENOVO 20XW0055GE/20XW0055GE, BIOS N32ET86W (1.62 ) 08/15/2023",
+		"smpboot: CPU0: 11th Gen Intel(R) Core(TM) i7-1165G7 @ 2.80GHz (family: 0x6, model: 0x8c, stepping: 0x1)",
+		"Memory: 7841212K/8203520K available (18432K kernel code, 2816K rwdata)",
+		"[drm] Initialized simpledrm 1.0.0 for simple-framebuffer.0 on minor 0",
+		"[drm] Initialized i915 1.6.0 for 0000:00:02.0 on minor 1",
+		"[drm] Initialized nvidia-drm 0.0.0 for 0000:01:00.0 on minor 2",
+	} {
+		m.feed(l)
+	}
+	if got := m.Line(); got != "LENOVO 20XW0055GE, 11th Gen Intel Core i7-1165G7, 8 GB RAM, i915 + nvidia-drm" {
+		t.Errorf("got %q", got)
 	}
 }

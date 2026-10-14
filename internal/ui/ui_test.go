@@ -351,3 +351,18 @@ func TestByTime(t *testing.T) {
 		t.Error("a second T should go back, keeping the selection")
 	}
 }
+
+// The machine card says when the kernel changed from the session before.
+func TestKernelChanged(t *testing.T) {
+	m := recorded(t)
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 32})
+	press(m, "down") // -2, clean power-off on 7.2.9; -3 before it ran 7.2.8
+	out := ansi.Strip(m.View().Content)
+	if !strings.Contains(out, "kernel 7.2.9-arch1-1") || !strings.Contains(out, "changed, was 7.2.8-arch1-2") {
+		t.Errorf("kernel change not shown:\n%s", out)
+	}
+	press(m, "up") // -1: same kernel as -2
+	if out := ansi.Strip(m.View().Content); strings.Contains(out, "changed, was") {
+		t.Error("kernel shown as changed when it is the same")
+	}
+}

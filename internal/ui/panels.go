@@ -142,13 +142,75 @@ func (m *model) sessionsPanel(w, h int, showIdx bool) []string {
 		}
 		rows = append(rows, mark(sel, focused)+t)
 	}
+	card := m.machineCard(inner)
 	listH := h - 2
+	if listH-len(card) >= 5 { // the list keeps room for a few sessions
+		listH -= len(card)
+	} else {
+		card = nil
+	}
 	m.offS = scrollTo(m.offS, m.selS, 1, listH)
+	lines := window(rows, m.offS, listH)
+	for len(lines) < listH {
+		lines = append(lines, "")
+	}
 	title := "Sessions"
 	if m.onlyBad {
 		title = "Sessions without a clean shutdown"
 	}
-	return frame(window(rows, m.offS, listH), w, h, title, focused)
+	return frame(append(lines, card...), w, h, title, focused)
+}
+
+// machineCard describes the machine of the selected session, from its own journal, at the
+// bottom of the sessions panel; it says when the kernel changed from the session before.
+func (m *model) machineCard(w int) []string {
+	res, _ := m.cur()
+	if res == nil {
+		return nil
+	}
+	mc := res.Machine
+	var lines []string
+	if mc.Model != "" {
+		lines = append(lines, stBold.Render(fit(mc.Model, w)))
+	}
+	var hw []string
+	for _, p := range []string{mc.CPU, mc.RAM()} {
+		if p != "" {
+			hw = append(hw, p)
+		}
+	}
+	if len(hw) > 0 {
+		lines = append(lines, stDim.Render(fit(strings.Join(hw, " · "), w)))
+	}
+	if len(mc.Graphics) > 0 {
+		lines = append(lines, stDim.Render(fit("graphics "+strings.Join(mc.Graphics, " + "), w)))
+	}
+	if res.Kernel != "" {
+		lines = append(lines, stDim.Render(fit("kernel "+res.Kernel, w)))
+		if before := m.kernelBefore(res); before != "" && before != res.Kernel {
+			lines = append(lines, stYellow.Render(fit("changed, was "+before, w)))
+		}
+	}
+	if len(lines) == 0 {
+		return nil
+	}
+	head := stGray.Render("─ This session " + strings.Repeat("─", max(0, w-15)))
+	return append([]string{head}, lines...)
+}
+
+// kernelBefore is the kernel of the session before this one, "" when unknown.
+func (m *model) kernelBefore(r *analyze.Result) string {
+	if len(m.src.Boots) == 0 { // a recorded journal: one session, nothing before it
+		return ""
+	}
+	prev := r.Boot.Index - 1
+	if res := m.results[prev].res; res != nil {
+		return res.Kernel
+	}
+	if st, ok := m.summaries[prev]; ok && st.err == nil {
+		return st.sum.Kernel
+	}
+	return ""
 }
 
 func (m *model) sessionRow(idx int, sel, focused bool, w int, showIdx bool) string {

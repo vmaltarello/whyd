@@ -38,6 +38,7 @@ type Result struct {
 	Next         *journal.Boot
 	Verdict      Verdict
 	Kernel       string
+	Machine      Machine
 	Lines        int // lines read: with a journal.Selection, not every line of the boot
 	HiddenLines  int
 	Suspends     int
@@ -141,10 +142,13 @@ func Run(in Input) (*Result, error) {
 				res.Users = append(res.Users, m[1])
 			}
 		}
-		if res.Kernel == "" && e.Kernel && strings.HasPrefix(e.Message, "Linux version ") {
-			if f := strings.Fields(e.Message); len(f) > 2 {
-				res.Kernel = f[2]
+		if e.Kernel {
+			if res.Kernel == "" && strings.HasPrefix(e.Message, "Linux version ") {
+				if f := strings.Fields(e.Message); len(f) > 2 {
+					res.Kernel = f[2]
+				}
 			}
+			res.Machine.feed(e.Message)
 		}
 		ring.add(TailLine{e, hidden, matched})
 		return nil
@@ -261,6 +265,7 @@ type Summary struct {
 	Errors int       // findings of level err
 	Worst  string    // title of the most serious warning or error, "" if none
 	Last   time.Time // last entry: a cached summary is valid only for the same end
+	Kernel string    `json:",omitempty"` // to tell when it changed from one session to the next
 }
 
 // Bad tells whether the session ended without a clean shutdown.
@@ -268,7 +273,7 @@ func (s Summary) Bad() bool { return !s.Kind.Clean() && s.Kind != EndRunning }
 
 // Summarize returns the summary of the result.
 func (r *Result) Summarize() Summary {
-	s := Summary{Kind: r.Verdict.Kind, Errors: r.Count(rules.Err), Last: r.Boot.Last}
+	s := Summary{Kind: r.Verdict.Kind, Errors: r.Count(rules.Err), Last: r.Boot.Last, Kernel: r.Kernel}
 	if w := r.Worst(); w != nil && w.Rule.Level >= rules.Warn {
 		s.Worst = w.Title
 	}

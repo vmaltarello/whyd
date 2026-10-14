@@ -75,6 +75,9 @@ func Markdown(w io.Writer, r *analyze.Result, red *Redactor) error {
 	if r.Kernel != "" {
 		p(", kernel %s", r.Kernel)
 	}
+	if mc := r.Machine.Line(); mc != "" {
+		p("\n- **machine:** %s", mc)
+	}
 	p("\n- **end:** %s", clean(r.Verdict.Summary))
 	if q := QuietLine(r); q != "" {
 		p("; %s", q)

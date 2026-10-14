@@ -66,6 +66,9 @@ func Text(w io.Writer, r *analyze.Result) error {
 		label, facts = "kernel", append([]string{r.Kernel}, facts...)
 	}
 	p("%-7s %s\n", label, strings.Join(facts, ", "))
+	if mc := r.Machine.Line(); mc != "" {
+		p("machine %s\n", mc)
+	}
 	return werr
 }
 
