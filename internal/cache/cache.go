@@ -36,7 +36,7 @@ func Open(key string) *Cache {
 	}
 	c.path = filepath.Join(dir, "whyd", "sessions.json")
 	var f file
-	if data, err := os.ReadFile(c.path); err == nil && json.Unmarshal(data, &f) == nil && f.Key == key {
+	if data, err := os.ReadFile(c.path); err == nil && json.Unmarshal(data, &f) == nil && f.Key == key && f.Boots != nil {
 		c.boots = f.Boots
 	}
 	return c
