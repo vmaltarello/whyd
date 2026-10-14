@@ -67,8 +67,9 @@ type sumMsg struct {
 	err   error
 }
 
-// keepResults is how many full analyses stay in memory, so going back and forth is instant.
-const keepResults = 6
+// keepResults is how many full analyses stay in memory, so going back and forth is instant
+// (about 1 MB each).
+const keepResults = 20
 
 type statusMsg string
 
@@ -110,6 +111,7 @@ func newModel(res *analyze.Result, src Source) *model {
 		src: src, results: map[int]bootState{res.Boot.Index: {res: res}},
 		summaries: map[int]sumState{res.Boot.Index: {sum: res.Summarize()}}, used: []int{res.Boot.Index},
 		reading: map[int]bool{}, want: new(atomic.Int64), window: analyze.TailWindow, redacted: true,
+		byTime: true,
 	}
 	m.want.Store(int64(res.Boot.Index))
 	m.since = src.Since
@@ -195,8 +197,9 @@ func (m *model) selected() (int, bool) {
 	return vis[min(m.selS, len(vis)-1)], true
 }
 
-// full analyses the selected session when its analysis isn't in memory. Moving fast through the
-// list starts one per session, but those no longer selected when their turn comes are skipped.
+// full analyses the selected session when its analysis isn't in memory, and the sessions next to
+// it, so moving through the list finds them ready. Moving fast starts one analysis per session,
+// but those of sessions no longer selected (or next to it) when their turn comes are skipped.
 func (m *model) full() tea.Cmd {
 	idx, ok := m.selected()
 	if !ok {
@@ -205,17 +208,28 @@ func (m *model) full() tea.Cmd {
 	m.want.Store(int64(idx))
 	if _, done := m.results[idx]; done {
 		m.touch(idx)
-		return nil
 	}
-	if m.src.Analyse == nil || m.reading[idx] {
+	cmds := []tea.Cmd{m.analyse(idx, openSlots)}
+	vis := m.visible()
+	for _, d := range []int{1, -1} {
+		if i := m.selS + d; i >= 0 && i < len(vis) {
+			cmds = append(cmds, m.analyse(vis[i], analyseSlots))
+		}
+	}
+	return tea.Batch(cmds...)
+}
+
+// analyse reads a session in one of the slots, unless it is in memory or being read.
+func (m *model) analyse(idx int, slots chan struct{}) tea.Cmd {
+	if _, done := m.results[idx]; done || m.src.Analyse == nil || m.reading[idx] {
 		return nil
 	}
 	m.reading[idx] = true
 	want := m.want
 	return func() tea.Msg {
-		openSlots <- struct{}{}
-		defer func() { <-openSlots }()
-		if want.Load() != int64(idx) {
+		slots <- struct{}{}
+		defer func() { <-slots }()
+		if w := int(want.Load()); w != idx && w != idx-1 && w != idx+1 { // the selection moved away
 			return bootMsg{index: idx}
 		}
 		res, err := m.src.Analyse(idx)

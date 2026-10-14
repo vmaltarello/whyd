@@ -7,7 +7,6 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/vmaltarello/whyd/internal/analyze"
-	"github.com/vmaltarello/whyd/internal/rules"
 )
 
 // Only the terminal's own palette, and colour only where it means something: red for errors and
@@ -31,19 +30,6 @@ var (
 	stYellow = lipgloss.NewStyle().Foreground(yellow)
 	stCyan   = lipgloss.NewStyle().Foreground(cyan)
 )
-
-func levelStyle(l rules.Level) lipgloss.Style {
-	switch l {
-	case rules.Err:
-		return stRed
-	case rules.Warn:
-		return stYellow
-	case rules.Hidden:
-		return stGray
-	default: // rules.Info, rules.Context
-		return stDim
-	}
-}
 
 func endStyle(k analyze.EndKind) lipgloss.Style {
 	switch {
@@ -96,12 +82,13 @@ func frame(lines []string, w, h int, title string, focused bool) []string {
 
 // frameNote is frame with a note in the bottom edge, on the right: what the panel doesn't show.
 func frameNote(lines []string, w, h int, title, note string, focused bool) []string {
-	bst := stGray
-	if focused {
-		bst = stPlain
-	}
+	bst := stGray // borders stay quiet; the title says which panel has the focus
 	if !strings.Contains(title, "\x1b") {
-		title = stBold.Render(title)
+		if focused {
+			title = stPlain.Render(title)
+		} else {
+			title = stDim.Render(title)
+		}
 	}
 	top := bst.Render("╭─") + " " + title + " "
 	top += bst.Render(strings.Repeat("─", max(0, w-5-lipgloss.Width(title))) + "╮")

@@ -140,7 +140,7 @@ func (m *model) fullScreen(title string, lines []string, keys [][2]string) strin
 func (m *model) linesView() string {
 	res, _ := m.cur()
 	ev := m.selectedProblem(res)
-	title := stBold.Render(ev.Title) + "  " + stDim.Render(report.Plural(len(ev.Entries), "journal line"))
+	title := stPlain.Render(ev.Title) + "  " + stDim.Render(report.Plural(len(ev.Entries), "journal line"))
 	return m.listView(title, "", "", m.problemLines(ev), [][2]string{{"enter", "open"}, {"esc", "back"}})
 }
 
@@ -187,7 +187,7 @@ func (m *model) problemLines(ev *rules.Event) []item {
 
 func (m *model) tailView() string {
 	res, _ := m.cur()
-	title := stBold.Render("Last "+analyze.Duration(m.window)) + "  " + stDim.Render("before "+report.When(res.Boot.Last))
+	title := stPlain.Render("Last "+analyze.Duration(m.window)) + "  " + stDim.Render("before "+report.When(res.Boot.Last))
 	hidden := "show harmless"
 	if m.showHidden {
 		hidden = "fold harmless"
@@ -295,10 +295,10 @@ func (m *model) reportView() string {
 			lines = append(lines, fit(l, m.w-4))
 		}
 	}
-	title := stBold.Render("Report") + "  " + stDim.Render("redacted: no addresses, host, user or Wi-Fi names")
+	title := stPlain.Render("Report") + "  " + stDim.Render("redacted: no addresses, host, user or Wi-Fi names")
 	redact := "show unredacted"
 	if !m.redacted {
-		title, redact = stBold.Render("Report")+"  "+stRed.Render("NOT redacted: addresses and names included"), "redact"
+		title, redact = stPlain.Render("Report")+"  "+stRed.Render("NOT redacted: addresses and names included"), "redact"
 	}
 	return m.fullScreen(title, lines, [][2]string{{"↑↓", "scroll"}, {"Y", "copy"}, {"S", "save"}, {"X", redact}, {"esc", "back"}})
 }
@@ -348,7 +348,7 @@ func (m *model) helpView() string {
 		key("L", "the last minutes of the session", 4),
 		key("R", "the report to paste on a forum", 4),
 		key("W", "warnings no rule recognises", 4),
-		key("U", "only sessions without a clean shutdown", 4),
+		key("U", "only the sessions that ended badly", 4),
 	}
 	half := (m.w - 4) / 2
 	var lines []string
@@ -364,15 +364,15 @@ func (m *model) helpView() string {
 	}
 	word := func(st lipgloss.Style, w, what string) string { return "  " + st.Render(pad(w, 16)) + what }
 	lines = append(lines, "", stGray.Render(strings.Repeat("┄", m.w-4)), "", section("how a session ended"), "",
-		word(stGreen, "shut down", "turned off from the system: a normal end"),
-		word(stGreen, "restarted", "restarted from the system: a normal end"),
+		word(stDim, "shut down", "turned off from the system: a normal end"),
+		word(stDim, "restarted", "restarted from the system: a normal end"),
 		word(stRed, "abrupt end", "no shutdown: a power cut, a held power button, or a freeze"),
 		word(stRed, "never woke up", "suspended or hibernated, and never resumed"),
 		word(stRed, "kernel panic", "the kernel stopped on an error it could not survive"),
 		"", section("levels"), "",
 		word(stRed, "error", "can explain a crash or a freeze by itself"),
 		word(stYellow, "warning", "worth a look"),
-		word(stDim, "info", "context, known and harmless issues"),
+		word(stGray, "info", "context, known and harmless issues"),
 		"", stGray.Render("Rules: built in, plus ~/.config/whyd/rules/*.toml"))
 	return m.fullScreen("Help", lines, [][2]string{{"any key", "back"}})
 }
@@ -392,7 +392,7 @@ func (m *model) unknownView() string {
 		items = append(items, item{head + g.Message, prio + " " + g.Source + " " + g.Message, 45, 0})
 	}
 	header := fmt.Sprintf("%5s  ", "TIMES") + pad("FIRST", 13) + pad("LEVEL", 9) + pad("PROGRAM", 16) + "MESSAGE"
-	title := stBold.Render("Other warnings") + "  " + stDim.Render(report.Plural(res.UnknownErr+res.UnknownW, "line")+", "+report.Plural(len(res.Unknown), "different message"))
+	title := stPlain.Render("Other warnings") + "  " + stDim.Render(report.Plural(res.UnknownErr+res.UnknownW, "line")+", "+report.Plural(len(res.Unknown), "different message"))
 	note := stGray.Render("a rule for one of them: docs/RULES.md")
 	return m.listView(title, header, note, items, [][2]string{{"esc", "back"}})
 }

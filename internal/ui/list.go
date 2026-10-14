@@ -113,7 +113,7 @@ func (m *model) listView(title, header, note string, items []item, keys [][2]str
 		case l < m.sel:
 			lines = append(lines, "  "+firstLine(shown[l], w))
 		case l < m.sel+len(exp):
-			lines = append(lines, mark(l == m.sel, true)+bold(exp[l-m.sel]))
+			lines = append(lines, mark(l == m.sel, true)+exp[l-m.sel])
 		default:
 			lines = append(lines, "  "+firstLine(shown[l-len(exp)+1], w))
 		}
@@ -133,11 +133,6 @@ func (m *model) listView(title, header, note string, items []item, keys [][2]str
 	}
 	out = append(out, frameNote(shownLines, m.w, m.h-2, title, note, true)...)
 	return strings.Join(append(out, m.keyBar(keys)), "\n")
-}
-
-// bold makes a styled line bold and keeps its colours: every reset turns bold on again.
-func bold(s string) string {
-	return "\x1b[1m" + strings.ReplaceAll(s, "\x1b[m", "\x1b[m\x1b[1m") + "\x1b[m"
 }
 
 // firstLine is an item on one line, cut to w cells.

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -193,7 +194,7 @@ func TestReviewDetails(t *testing.T) {
 	// a long problem title is readable in full once selected
 	press(m, "right")
 	res, _ := m.cur()
-	for i, ev := range res.Findings {
+	for i, ev := range m.problems(res) {
 		if len(ev.Title) > 45 {
 			m.selP = i
 			out := ansi.Strip(m.View().Content)
@@ -227,35 +228,54 @@ func TestReviewDetails(t *testing.T) {
 	}
 }
 
-// Selecting a session analyses it when its analysis isn't in memory; an analysis whose session
-// is no longer selected is skipped; only keepResults analyses stay in memory.
+// drain runs a command and the commands its messages lead to, as the program would.
+func drain(m *model, cmd tea.Cmd) {
+	if cmd == nil {
+		return
+	}
+	switch msg := cmd().(type) {
+	case tea.BatchMsg:
+		for _, c := range msg {
+			drain(m, c)
+		}
+	case nil:
+	default:
+		_, next := m.Update(msg)
+		drain(m, next)
+	}
+}
+
+// Selecting a session analyses it when its analysis isn't in memory, and the sessions next to it;
+// an analysis whose session is no longer selected, nor next to it, is skipped; only keepResults
+// analyses stay in memory.
 func TestSessionLoading(t *testing.T) {
 	m := recorded(t)
 	full := map[int]*analyze.Result{}
 	for idx, st := range m.results {
 		full[idx] = st.res
 	}
-	runs := 0
-	m.src.Analyse = func(idx int) (*analyze.Result, error) { runs++; return full[idx], nil }
+	runs := map[int]int{}
+	m.src.Analyse = func(idx int) (*analyze.Result, error) { runs[idx]++; return full[idx], nil }
 	delete(m.results, -2)
-	cmd := m.key("down") // to session -2, not in memory
+	delete(m.results, -3)
+	cmd := m.key("down") // to session -2, not in memory; -3 next to it isn't either
 	if res, _ := m.cur(); res != nil || cmd == nil {
 		t.Fatal("session -2 should be read on selection")
 	}
 	if m.key("l") != nil || m.view != vMain || m.status != "still reading this session" {
 		t.Fatalf("L while reading: view %v, status %q", m.view, m.status)
 	}
-	m.Update(cmd())
-	if res, _ := m.cur(); res == nil || runs != 1 {
-		t.Fatalf("session -2 not loaded (%d runs)", runs)
+	drain(m, cmd)
+	if res, _ := m.cur(); res == nil || runs[-2] != 1 || runs[-3] != 1 {
+		t.Fatalf("session -2 and the one next to it not loaded: %v", runs)
 	}
 
-	delete(m.results, -3)
-	stale := m.key("down") // to -3, then away before its analysis runs
-	m.key("up")
-	m.Update(stale())
-	if runs != 1 {
-		t.Error("an analysis ran for a session no longer selected")
+	delete(m.results, -4)
+	stale := m.key("end") // to -4, then far from it before its analysis runs
+	m.key("home")
+	drain(m, stale)
+	if runs[-4] != 0 {
+		t.Error("an analysis ran for a session no longer selected nor next to it")
 	}
 
 	for i := range keepResults + 3 {
@@ -325,18 +345,14 @@ func TestSaveNeverOverwrites(t *testing.T) {
 	}
 }
 
-// T orders the problems by time, with the session's moments between them, and back; the same
-// problem stays selected.
+// Problems are in time order, with the session's moments between them; T orders them by
+// importance and back, and the same problem stays selected.
 func TestByTime(t *testing.T) {
 	m := recorded(t)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	press(m, "right", "down")
 	res, _ := m.cur()
 	want := m.selectedProblem(res)
-	press(m, "t")
-	if !m.byTime || m.selectedProblem(res) != want {
-		t.Fatalf("T should keep %q selected", want.Title)
-	}
 	out := ansi.Strip(m.View().Content)
 	for _, s := range []string{"by time", "── started · kernel", "── went to sleep", "── woke up after 10h38m", "── the journal stops, with no shutdown"} {
 		if !strings.Contains(out, s) {
@@ -348,6 +364,13 @@ func TestByTime(t *testing.T) {
 	}
 	press(m, "t")
 	if m.byTime || m.selectedProblem(res) != want {
+		t.Fatalf("T should order by importance keeping %q selected", want.Title)
+	}
+	if out := ansi.Strip(m.View().Content); !strings.Contains(out, "by importance") || strings.Contains(out, "went to sleep") {
+		t.Error("by importance: no order shown, or moments still listed")
+	}
+	press(m, "t")
+	if !m.byTime || m.selectedProblem(res) != want {
 		t.Error("a second T should go back, keeping the selection")
 	}
 }
@@ -372,7 +395,14 @@ func TestKernelChanged(t *testing.T) {
 func TestProblemLinesFolded(t *testing.T) {
 	m := recorded(t)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 32})
-	press(m, "right", "enter") // out of memory, 4 reports of the kernel
+	press(m, "right")
+	res, _ := m.cur()
+	for i, ev := range m.problems(res) {
+		if strings.HasPrefix(ev.Title, "out of memory") { // 4 reports of the kernel
+			m.selP = i
+		}
+	}
+	press(m, "enter")
 	m.View()
 	if m.view != vLines || len(m.shown) != 12 {
 		t.Fatalf("view %d, %d items; want the 4 reports folded in 12", m.view, len(m.shown))
@@ -381,5 +411,98 @@ func TestProblemLinesFolded(t *testing.T) {
 	m.View()
 	if len(m.shown) <= 12 {
 		t.Error("Enter on a fold should open it")
+	}
+}
+
+// Whatever the order analyses arrive in (selected session, neighbours read ahead, the user moving
+// on meanwhile), the panels always show the selected session: its span, its verdict, its problems.
+func TestPanelsMatchSelection(t *testing.T) {
+	m := recorded(t)
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	full := map[int]*analyze.Result{}
+	for idx, st := range m.results {
+		full[idx] = st.res
+	}
+	m.src.Analyse = func(idx int) (*analyze.Result, error) { return full[idx], nil }
+	m.results = map[int]bootState{}
+	m.used = nil
+
+	var pending []tea.Cmd
+	check := func(step string) {
+		t.Helper()
+		idx, _ := m.selected()
+		res, _ := m.cur()
+		out := ansi.Strip(m.View().Content)
+		if res == nil {
+			if strings.Contains(out, "TIMES") {
+				t.Errorf("%s: session %d not read yet, but a problem list is shown", step, idx)
+			}
+			return
+		}
+		if res.Boot.Index != idx {
+			t.Fatalf("%s: selected %d, panels show %d", step, idx, res.Boot.Index)
+		}
+		if !strings.Contains(out, report.When(res.Boot.First)+" → ") {
+			t.Errorf("%s: span of session %d not shown", step, idx)
+		}
+		for _, ev := range m.problems(res)[:min(3, len(res.Findings))] {
+			if !strings.Contains(out, fit(ev.Title, 20)[:15]) {
+				t.Errorf("%s: problem %q of session %d not shown", step, ev.Title, idx)
+			}
+		}
+		for other, r := range full {
+			if other == idx {
+				continue
+			}
+			for _, ev := range r.Findings {
+				own := func(e *rules.Event) bool {
+					return len(e.Title) >= 25 && e.Title[:25] == ev.Title[:min(25, len(ev.Title))]
+				}
+				if len(ev.Title) > 25 && !slices.ContainsFunc(res.Findings, own) && strings.Contains(out, ev.Title[:25]) {
+					t.Errorf("%s: session %d shows %q of session %d", step, idx, ev.Title, other)
+				}
+			}
+		}
+	}
+	// move fast, then deliver the analyses in reverse order, checking at every message
+	for _, k := range []string{"down", "down", "down", "up", "up"} {
+		pending = append(pending, m.key(k))
+		check("after " + k)
+	}
+	for _, cmd := range slices.Backward(pending) {
+		var msgs []tea.Msg
+		var collect func(tea.Cmd)
+		collect = func(c tea.Cmd) {
+			if c == nil {
+				return
+			}
+			switch msg := c().(type) {
+			case tea.BatchMsg:
+				for _, cc := range msg {
+					collect(cc)
+				}
+			case nil:
+			default:
+				msgs = append(msgs, msg)
+			}
+		}
+		collect(cmd)
+		for _, msg := range msgs {
+			_, next := m.Update(msg)
+			check("delivery")
+			drain(m, next)
+			check("drain")
+		}
+	}
+	drain(m, m.key("home"))
+	for _, idx := range []int{-2, -3, -4} { // sessions not read yet, next to ones already read
+		delete(m.results, idx)
+		m.used = slices.DeleteFunc(m.used, func(i int) bool { return i == idx })
+	}
+	for range 4 { // every session in turn: while it is being read, then once read
+		cmd := m.key("down")
+		check("moving")
+		drain(m, cmd)
+		check("browse")
 	}
 }

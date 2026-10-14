@@ -261,11 +261,13 @@ func findings(events []*rules.Event) []*rules.Event {
 
 // Summary is what lists show about a session: small, and stored in the cache for ended ones.
 type Summary struct {
-	Kind   EndKind
-	Errors int       // findings of level err
-	Worst  string    // title of the most serious warning or error, "" if none
-	Last   time.Time // last entry: a cached summary is valid only for the same end
-	Kernel string    `json:",omitempty"` // to tell when it changed from one session to the next
+	Kind     EndKind
+	Errors   int       // findings of level err
+	Warnings int       `json:",omitempty"` // findings of level warn
+	Worst    string    // title of the most serious warning or error, "" if none
+	Last     time.Time // last entry: a cached summary is valid only for the same end
+	Kernel   string    `json:",omitempty"` // to tell when it changed from one session to the next
+	Machine  Machine   `json:",omitzero"`  // shown at once while the session is being read
 }
 
 // Bad tells whether the session ended without a clean shutdown.
@@ -273,7 +275,10 @@ func (s Summary) Bad() bool { return !s.Kind.Clean() && s.Kind != EndRunning }
 
 // Summarize returns the summary of the result.
 func (r *Result) Summarize() Summary {
-	s := Summary{Kind: r.Verdict.Kind, Errors: r.Count(rules.Err), Last: r.Boot.Last, Kernel: r.Kernel}
+	s := Summary{
+		Kind: r.Verdict.Kind, Errors: r.Count(rules.Err), Warnings: r.Count(rules.Warn),
+		Last: r.Boot.Last, Kernel: r.Kernel, Machine: r.Machine,
+	}
 	if w := r.Worst(); w != nil && w.Rule.Level >= rules.Warn {
 		s.Worst = w.Title
 	}
