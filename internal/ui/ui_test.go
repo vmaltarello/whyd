@@ -366,3 +366,20 @@ func TestKernelChanged(t *testing.T) {
 		t.Error("kernel shown as changed when it is the same")
 	}
 }
+
+// A problem's journal lines fold what lies between the first and last line of each long
+// occurrence; Enter opens a fold.
+func TestProblemLinesFolded(t *testing.T) {
+	m := recorded(t)
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 32})
+	press(m, "right", "enter") // out of memory, 4 reports of the kernel
+	m.View()
+	if m.view != vLines || len(m.shown) != 12 {
+		t.Fatalf("view %d, %d items; want the 4 reports folded in 12", m.view, len(m.shown))
+	}
+	press(m, "down", "enter")
+	m.View()
+	if len(m.shown) <= 12 {
+		t.Error("Enter on a fold should open it")
+	}
+}

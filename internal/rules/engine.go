@@ -19,6 +19,7 @@ type Event struct {
 	Fields  map[string]string   // fields of the first occurrence
 	Samples []map[string]string // fields of each occurrence (capped)
 	Entries []journal.Entry     // raw lines behind it (capped)
+	Starts  []int               // where each occurrence begins in Entries
 }
 
 const (
@@ -128,13 +129,14 @@ func (e *Engine) emit(r *Rule, f map[string]string, entries []journal.Entry) {
 			ev.Samples = append(ev.Samples, f)
 		}
 		if room := maxEntries - len(ev.Entries); room > 0 {
+			ev.Starts = append(ev.Starts, len(ev.Entries))
 			ev.Entries = append(ev.Entries, entries[:min(room, len(entries))]...)
 		}
 		return
 	}
 	e.events = append(e.events, &Event{
 		Rule: r, First: first, Last: last, Count: 1, Title: title,
-		Fields: f, Samples: []map[string]string{f}, Entries: entries,
+		Fields: f, Samples: []map[string]string{f}, Entries: entries, Starts: []int{0},
 	})
 }
 

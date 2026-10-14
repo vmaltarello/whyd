@@ -14,7 +14,9 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/vmaltarello/whyd/internal/analyze"
+	"github.com/vmaltarello/whyd/internal/journal"
 	"github.com/vmaltarello/whyd/internal/report"
+	"github.com/vmaltarello/whyd/internal/rules"
 )
 
 // keys of the full-screen views
@@ -25,6 +27,13 @@ func (m *model) viewKey(k string) tea.Cmd {
 	}
 	if isList(m.view) {
 		if m.view == vTail && !m.searching && m.tailKeys(k) {
+			return nil
+		}
+		if m.view == vLines && !m.searching && k == "enter" {
+			if m.sel < len(m.shown) && m.shown[m.sel].block > 0 {
+				b := m.shown[m.sel].block
+				m.openHidden[b] = !m.openHidden[b]
+			}
 			return nil
 		}
 		if m.listKey(k) {
@@ -131,13 +140,47 @@ func (m *model) fullScreen(title string, lines []string, keys [][2]string) strin
 func (m *model) linesView() string {
 	res, _ := m.cur()
 	ev := m.selectedProblem(res)
-	var items []item
-	for _, e := range ev.Entries {
-		prefix := e.Time.Format("15:04:05") + " " + e.Source + ": "
-		items = append(items, item{stDim.Render(prefix) + e.Message, prefix + e.Message, len(prefix), 0})
+	title := stBold.Render(ev.Title) + "  " + stDim.Render(report.Plural(len(ev.Entries), "journal line"))
+	return m.listView(title, "", "", m.problemLines(ev), [][2]string{{"enter", "open"}, {"esc", "back"}})
+}
+
+// problemLines are the journal lines of a problem. An occurrence over many lines (a kernel
+// report, a stack trace) shows its first and last line, what the rule recognised, and folds the
+// lines between: Enter opens them.
+func (m *model) problemLines(ev *rules.Event) []item {
+	line := func(e journal.Entry) item {
+		head := stDim.Render(e.Time.Format("15:04:05")) + "  " + stCyan.Render(pad(e.Source, 12)) + " "
+		return item{head + e.Message, e.Source + " " + e.Message, 24, 0}
 	}
-	title := fmt.Sprintf("Journal lines: %s  (%s)", ev.Title, report.Plural(len(ev.Entries), "line"))
-	return m.listView(title, "", "", items, [][2]string{{"esc", "back"}})
+	var items []item
+	for i, start := range ev.Starts {
+		end := len(ev.Entries)
+		if i+1 < len(ev.Starts) {
+			end = ev.Starts[i+1]
+		}
+		occ := ev.Entries[start:end]
+		if len(occ) <= 3 {
+			for _, e := range occ {
+				items = append(items, line(e))
+			}
+			continue
+		}
+		items = append(items, line(occ[0]))
+		open := m.openHidden[i+1]
+		sign := "▸"
+		if open {
+			sign = "▾"
+		}
+		t := fmt.Sprintf("%22s%s %s", "", sign, report.Plural(len(occ)-2, "more line")+" of this one")
+		items = append(items, item{stGray.Render(t), t, 0, i + 1})
+		if open {
+			for _, e := range occ[1 : len(occ)-1] {
+				items = append(items, line(e))
+			}
+		}
+		items = append(items, line(occ[len(occ)-1]))
+	}
+	return items
 }
 
 // ---- the last minutes ----
