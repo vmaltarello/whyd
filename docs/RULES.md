@@ -21,8 +21,8 @@ The first rule that recognises the line takes it, and its **level** says what ha
 - `context`: the line is taken but not listed, it is only context (the system suspended);
 - `hidden`: the line is hidden and only counted ("437 firewall log lines").
 
-If no rule takes a line and it is a warning or an error, whyd lists it as **not recognised**
-(`W` in the interface). Those are the lines a new rule can explain.
+If no rule takes a line and it is a warning or an error, whyd lists it among the **other
+warnings** (`W` in the interface). Those are the lines a new rule can explain.
 
 ## Your first rule, step by step
 
@@ -33,10 +33,10 @@ We'll write a rule for a real message whyd doesn't recognise yet.
 Open whyd, choose a session and press `W`: these are the warnings and errors no rule took.
 
 ```
-┌─ Not recognised: 1 errors, 8 warnings, 9 messages ──────────────────────────────────────┐
-│ PRIORITY  TIMES  FIRST      SOURCE          MESSAGE                                     │
-│ warning   1      13:45      (udev-worker)   ACAD: Process '/bin/sh -c 'echo 75 80 > /s… │
-│ warning   1      13:45      (udev-worker)   cfg80211: Process '/usr/bin/set-wireless-r… │
+╭─ Other warnings  9 lines, 9 different messages ────────────────────────────────────────╮
+│   TIMES  FIRST        LEVEL    PROGRAM          MESSAGE                                │
+│ ▌     1  13:45        warning  (udev-worker)    ACAD: Process '/bin/sh -c 'echo 75 80… │
+│       1  13:45        warning  (udev-worker)    cfg80211: Process '/usr/bin/set-wirel… │
 ```
 
 Select a line to read it in full:
@@ -46,7 +46,7 @@ cfg80211: Process '/usr/bin/set-wireless-regdom' failed with exit code 1.
 ```
 
 Two things matter: the **message** (the text) and the **source**, the program that logged it,
-here `(udev-worker)`. PRIORITY is how serious the program said the line was. The message says that a command started by a udev rule failed.
+here `(udev-worker)` in the PROGRAM column. LEVEL is how serious the program said the line was. The message says that a command started by a udev rule failed.
 
 ### 2. Write a rule that recognises it
 
@@ -67,16 +67,16 @@ Line by line:
 - `id` names the rule: unique, `area.what-it-is` in lowercase letters, digits and dashes. The
   part before the dot is the rule's area (`mine` here; `gpu`, `disk`, `memory` in the built-in
   rules).
-- `level`: how serious **you** judge the problem: `"err"`, `"warn"` or `"info"`, as whyd shows
-  it. It doesn't depend on the PRIORITY of the line.
+- `level`: how serious **you** judge the problem: `"err"`, `"warn"` or `"info"`, which whyd
+  shows as error, warning and info. It doesn't depend on the level the program gave the line.
 - `text`: the text to look for in the line, anywhere in it.
 - `title`: what the problem is called in the list.
 
 Open whyd on that session, or print its summary with `whyd -b N | cat`:
 
 ```
-TIME          LEVEL  WHAT                                                 TIMES
-Wed 13:45     warn   a udev command failed                                2
+TIME          LEVEL   WHAT                                                 TIMES
+Wed 13:45     warning a udev command failed                                2
 ```
 
 Both lines are recognised, and since they have the same title they are one problem that
@@ -90,7 +90,7 @@ happened 2 times.
 source = "(udev-worker)"
 ```
 
-Write it exactly as in the SOURCE column, parentheses and capitals included. Kernel messages
+Write it exactly as in the PROGRAM column, parentheses and capitals included. Kernel messages
 have the source `kernel`.
 
 Always give the source when you know it: whyd doesn't read every line of a long session, but
@@ -111,9 +111,9 @@ title = "{device}: udev command failed"
 ` failed`, and `{code:num}` a number. Everything else is plain text, matched as written:
 
 ```
-TIME          LEVEL  WHAT                                                 TIMES
-Wed 13:45     warn   ACAD: udev command failed                            1
-Wed 13:45     warn   cfg80211: udev command failed                        1
+TIME          LEVEL   WHAT                                                 TIMES
+Wed 13:45     warning ACAD: udev command failed                            1
+Wed 13:45     warning cfg80211: udev command failed                        1
 ```
 
 The titles are now different, so they are two problems. `{source}` is always available too.
@@ -135,18 +135,17 @@ What the rule was there to do, such as a setting or a permission, was not done.
 lines. This is where each field appears in whyd:
 
 ```
-┌─ Problems: 4 warn, 6 info ─────────────────────────────────────┐
-│ TIME       LEVEL  WHAT                                   TIMES │
-│ 13:45      warn   ACAD: udev command failed                  1 │
-│ 13:45      warn   cfg80211: udev command failed              1 │  ← level, title, times
-│ 13:45      warn   NetworkManager error                       1 │
-│                                                                │
-│ '/usr/bin/set-wireless-regdom' exited with code 1              │  ← note
-│                                                                │
+╭─ Problems  4 warnings · 6 info ────────────────────────────────╮
+│   TIME         LEVEL    WHAT                             TIMES │
+│ ▌ 13:45        warning  ACAD: udev command failed            1 │  ← level, title, times
+│   13:45        warning  cfg80211: udev command failed        1 │
+│   13:45        warning  NetworkManager error                 1 │
+│ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ │
 │ A udev rule ran a command when the device appeared or          │  ← explain
 │ changed, and the command failed. What the rule was there to    │
 │ do, such as a setting or a permission, was not done.           │
-└────────────────────────────────────────────────────────────────┘
+│ '/bin/sh -c 'echo 75 80 > /s…' exited with code 1              │  ← note
+╰────────────────────────────────────────────────────────────────╯
 ```
 
 The same title, level and note go into the summary as text and into the report.

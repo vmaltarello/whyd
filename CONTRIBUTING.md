@@ -29,8 +29,8 @@ WHYD_LIVE=1 go test -run TestSelection ./internal/analyze
 
 ## Rules
 
-The most useful contribution. Start from the lines whyd lists as not recognised (`W` in the
-interface, "Not recognised" in `whyd report`), write a rule with at least one real example
+The most useful contribution. Start from the lines whyd lists as other warnings (`W` in the
+interface, "Other warnings" in `whyd report`), write a rule with at least one real example
 line and one that must not match, and check it with `whyd rules mine.toml`. The format and the
 guidelines are in [docs/RULES.md](docs/RULES.md).
 
@@ -50,9 +50,10 @@ don't want to share before attaching it.
 - Plain Go and the standard library first; the interface uses Bubble Tea v2 and Lip Gloss v2.
 - `gofmt`, `go vet` and the tests must pass.
 - Commits: one line, conventional style (`feat:`, `fix:`, `docs:`, `test:`, `refactor:`).
-- On screen: short factual wording, journalctl's words (err, warn, info), compact numbers
-  (17h22m, 7.5G), terminal colours only and only where they mean something (red err and no
-  shutdown, yellow warn, green clean end), no decorative symbols, keyboard only.
+- On screen: short factual wording in plain words (error, warning, abrupt end), compact numbers
+  (17h22m, 7.5G), terminal colours only and only where they mean something (red errors and bad
+  ends, yellow warnings, green clean ends), bold only for titles, verdicts and the selection,
+  no decorative symbols, keyboard only.
 
 ## Releases
 
