@@ -413,8 +413,11 @@ Context rules take their lines without listing a problem; hidden lines are count
 | `dbus.service-file` | desktop.toml | info | D-Bus service file problem |
 | `network.nm-error` | desktop.toml | warn | NetworkManager error |
 | `bluetooth.error` | desktop.toml | info | bluetoothd error |
+| `audio.no-rtkit` | desktop.toml | info | RealtimeKit not available |
+| `dbus.policy-denied` | desktop.toml | info | D-Bus policy refused {call} |
 | `firmware.boot` | firmware.toml | info | firmware or hardware setup message |
 | `firmware.tpm` | firmware.toml | info | TPM NvPCR not available |
+| `firmware.regdb` | firmware.toml | info | Wi-Fi regulatory database missing |
 | `gpu.amdgpu-timeout` | gpu.toml | err | amdgpu ring {ring} timeout |
 | `gpu.amdgpu-reset` | gpu.toml | err | amdgpu GPU reset |
 | `gpu.i915-hang` | gpu.toml | err | i915 GPU hang |
@@ -430,6 +433,12 @@ Context rules take their lines without listing a problem; hidden lines are count
 | `hidden.rtw88-push` | hidden.toml | hidden | rtw88 push errors |
 | `hidden.wireless-ext` | hidden.toml | hidden | wireless extensions warnings |
 | `hidden.wpa-multicast` | hidden.toml | hidden | wpa_supplicant multicast notices |
+| `hidden.shutdown-jobs` | hidden.toml | hidden | jobs refused during shutdown |
+| `hidden.autostart-executable` | hidden.toml | hidden | autostart files marked executable |
+| `hidden.portal-backend` | hidden.toml | hidden | desktop portal notices |
+| `hidden.nm-dispatcher` | hidden.toml | hidden | NetworkManager dispatcher notices |
+| `hidden.logout-session` | hidden.toml | hidden | logout notices for sessions already closed |
+| `hidden.securetty` | hidden.toml | hidden | pam_securetty tty notices |
 | `kernel.panic` | kernel.toml | err | kernel panic: {reason} |
 | `kernel.hung-task` | kernel.toml | err | {process} blocked for over {secs}s |
 | `kernel.soft-lockup` | kernel.toml | err | CPU {cpu} soft lockup ({secs}s) |
@@ -448,13 +457,13 @@ Context rules take their lines without listing a problem; hidden lines are count
 
 ### How much they recognise
 
-On the 42 sessions of the laptop whyd was developed on, this is where each warning and error
+On the 49 sessions of the laptop whyd was developed on, this is where each warning and error
 line ended up:
 
 | Lines | Recognised by a rule | Hidden | Not recognised |
 |---|---|---|---|
-| Errors (priority 0 to 3): 4,645 | 2,675 (58%) | 1,964 (42%) | 6 (0.1%) |
-| Warnings (priority 4): 10,828 | 4,238 (39%) | 5,440 (50%) | 1,150 (11%) |
+| Errors (priority 0 to 3): 4,718 | 2,747 (58%) | 1,971 (42%) | 0 |
+| Warnings (priority 4): 11,481 | 4,479 (39%) | 6,188 (54%) | 814 (7%) |
 
 Another machine, with other hardware and other programs, will have more lines not recognised:
 each of them is a rule waiting to be written.

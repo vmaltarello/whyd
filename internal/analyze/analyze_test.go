@@ -68,7 +68,7 @@ func TestFreeze(t *testing.T) {
 	if r.Quiet.Round(time.Minute) != 14*time.Minute {
 		t.Errorf("quiet %v, want ~14 min", r.Quiet)
 	}
-	if r.HiddenLines != 437+149+1 { // firewall, rtw88 push errors, one wireless-extensions warning
+	if r.HiddenLines != 437+149+1+1+1 { // firewall, rtw88 push errors, one wireless-extensions warning, autostart, portal
 		t.Errorf("hidden lines %d", r.HiddenLines)
 	}
 	if len(r.Tail) == 0 || r.Tail[0].Time.Before(r.Boot.Last.Add(-TailKeep)) || len(r.TailSince(TailWindow)) >= len(r.Tail) {

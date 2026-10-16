@@ -55,3 +55,17 @@ match       = [
   "Could not extend NvPCR: No such file or directory",
   "Failed to initialize NvPCR index: No such file or directory",
 ]
+
+[[rule]]
+id      = "firmware.regdb"
+level   = "info"
+source  = "kernel"
+text    = "Direct firmware load for regulatory.db failed"
+title   = "Wi-Fi regulatory database missing"
+note    = "install wireless-regdb"
+explain = """
+The kernel could not find the database of the Wi-Fi channels and power allowed in each
+country, so it keeps to the most restrictive settings: some channels may be missing and the
+signal weaker. The database comes in the wireless-regdb package.
+"""
+match   = ["faux_driver regulatory: Direct firmware load for regulatory.db failed with error -2"]
