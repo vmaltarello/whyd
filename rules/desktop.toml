@@ -86,3 +86,41 @@ explain     = """
 The Bluetooth daemon reported an internal error; the message, under Lines, names the part.
 """
 match       = ["src/adv_monitor.c:btd_adv_monitor_power_down() Unexpected NULL btd_adv_monitor_manager object upon power down"]
+
+[[rule]]
+id          = "audio.no-rtkit"
+level       = "info"
+text        = [
+  "mod.rt: RTKit error",
+  "Failed to load RealtimeKit property",
+]
+title       = "RealtimeKit not available"
+note        = "audio may crackle under load"
+merge_title = "RealtimeKit not available"
+explain     = """
+PipeWire and the desktop portal asked RealtimeKit to run audio at real-time priority, and it
+isn't there. Audio still works, but under load it can skip or crackle, with underruns in the
+journal. RealtimeKit comes in the rtkit package.
+"""
+match       = [
+  "mod.rt: RTKit error: org.freedesktop.DBus.Error.ServiceUnknown",
+  "Failed to load RealtimeKit property: GDBus.Error:org.freedesktop.DBus.Error.ServiceUnknown: The name is not activatable",
+]
+
+[[rule]]
+id      = "dbus.policy-denied"
+level   = "info"
+source  = "dbus-broker"
+text    = [
+  "A security policy denied {_} to send method call {call} to ",
+  "A security policy denied {_} to send signal {call} to ",
+]
+title   = "D-Bus policy refused {call}"
+note    = "matters only if the program behind it misbehaves"
+explain = """
+A program sent a D-Bus message that the bus policy doesn't allow, and the bus dropped it. The
+policy comes with the packages and is usually right; it matters only if the program on the
+other side misbehaves at the same time.
+"""
+match   = ["A security policy denied :1.4 to send method call /midi/profile:org.bluez.GattProfile1.Release to :1.48."]
+nomatch = ["A security policy denied :1.4 to own the name org.example.Service."]

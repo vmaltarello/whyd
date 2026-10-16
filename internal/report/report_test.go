@@ -87,7 +87,7 @@ func TestText(t *testing.T) {
 	out := b.String()
 	for _, want := range []string{
 		"end     abrupt end, journal stops at 12:11:56",
-		"other   253 warnings no rule recognises, in 44 different messages",
+		"other   250 warnings no rule recognises, in 41 different messages",
 		"        nothing abnormal logged after 11:57",
 		"before  10:53 out of memory, 4 processes killed; sunshine killed by SIGTRAP",
 	} {
