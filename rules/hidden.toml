@@ -36,3 +36,63 @@ source = "wpa_supplicant"
 text   = "multicast RX registrations are not supported"
 title  = "wpa_supplicant multicast notices"
 match  = ["wlp1s0: nl80211: kernel reports: multicast RX registrations are not supported"]
+
+[[rule]]
+id     = "hidden.shutdown-jobs"
+level  = "hidden"
+source = "systemd"
+# a device appearing while the machine shuts down: systemd refuses to start what it wants
+text   = "Failed to enqueue {_} job, ignoring: Transaction for {_} is destructive"
+title  = "jobs refused during shutdown"
+match  = [
+  "sys-devices-pci0000:00-0000:00:08.1-0000:04:00.6-sound-card1-controlC1.device: Failed to enqueue SYSTEMD_WANTS job, ignoring: Transaction for sound.target/start is destructive (shutdown.target has 'start' job queued, but 'stop' is included in transaction).",
+  "sys-devices-virtual-misc-rfkill.device: Failed to enqueue SYSTEMD_USER_WANTS job, ignoring: Transaction for systemd-rfkill.socket/start is destructive (poweroff.target has 'start' job queued, but 'stop' is included in transaction).",
+]
+nomatch = ["Failed to enqueue job for sound.target: Transaction is destructive"]
+
+[[rule]]
+id     = "hidden.autostart-executable"
+level  = "hidden"
+source = "systemd-xdg-autostart-generator"
+text   = "is marked executable. Please remove executable permission bits"
+title  = "autostart files marked executable"
+match  = ["Configuration file /home/user/.config/autostart/jetbrains-toolbox.desktop is marked executable. Please remove executable permission bits. Proceeding anyway."]
+
+[[rule]]
+id     = "hidden.portal-backend"
+level  = "hidden"
+# the portal names its own path as the program, which differs between distributions
+text   = [
+  "portal requires an access impl",
+  "A backend call failed: Inhibiting other than idle not supported",
+]
+title  = "desktop portal notices"
+match  = [
+  "The screenshot portal requires an access impl",
+  "A backend call failed: Inhibiting other than idle not supported",
+]
+
+[[rule]]
+id     = "hidden.nm-dispatcher"
+level  = "hidden"
+source = "NetworkManager"
+# the same missing service dbus.activation-failed already reports, seen from NetworkManager
+text   = "Could not activate remote peer 'org.freedesktop.nm_dispatcher'"
+title  = "NetworkManager dispatcher notices"
+match  = ["<warn>  [1791377529.3219] dispatcher: (24) failed (after 0.004 sec): Could not activate remote peer 'org.freedesktop.nm_dispatcher': activation request failed: unit is invalid"]
+
+[[rule]]
+id     = "hidden.logout-session"
+level  = "hidden"
+# at logout the user manager releases a session logind has already closed
+text   = "Varlink call io.systemd.Login.ReleaseSession failed: io.systemd.Login.NoSuchSession"
+title  = "logout notices for sessions already closed"
+match  = ["pam_systemd(systemd-user:session): Varlink call io.systemd.Login.ReleaseSession failed: io.systemd.Login.NoSuchSession"]
+
+[[rule]]
+id     = "hidden.securetty"
+level  = "hidden"
+# graphical greeters log in without a tty
+text   = "pam_securetty({_}): cannot determine user's tty"
+title  = "pam_securetty tty notices"
+match  = ["pam_securetty(greetd:auth): cannot determine user's tty"]

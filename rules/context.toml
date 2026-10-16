@@ -39,7 +39,10 @@ match  = ["PM: hibernation: hibernation exit"]
 id      = "known.rtw88-tx"
 level   = "info"
 source  = "kernel"
-text    = "{driver} {_}: failed to write TX skb to HCI"
+text    = [
+  "{driver} {_}: failed to write TX skb to HCI",
+  "{driver} {_}: failed to get tx report from firmware",
+]
 title   = "{driver} TX errors, known issue"
 note    = "common with this driver; matters if Wi-Fi drops at the same time"
 explain = """
@@ -47,7 +50,10 @@ The rtw88 Wi-Fi driver could not hand a packet to the chip. Bursts of this messa
 common with this driver and the connection usually recovers; it matters if Wi-Fi drops at
 the same times.
 """
-match   = ["rtw88_8822ce 0000:01:00.0: failed to write TX skb to HCI"]
+match   = [
+  "rtw88_8822ce 0000:01:00.0: failed to write TX skb to HCI",
+  "rtw88_8822ce 0000:01:00.0: failed to get tx report from firmware",
+]
 
 [[rule]]
 id      = "known.portal-gtk"
