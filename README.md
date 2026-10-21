@@ -12,6 +12,7 @@
 [![Go](https://img.shields.io/github/go-mod/go-version/vmaltarello/whyd?style=flat-square&logo=go&logoColor=white&color=00ADD8)](go.mod)
 [![License](https://img.shields.io/github/license/vmaltarello/whyd?style=flat-square&color=blue)](LICENSE)
 [![Linux](https://img.shields.io/badge/Linux-systemd-30D475?style=flat-square&logo=linux&logoColor=white)](#install)
+[![whyd on The Terminal Index](https://cli.masoko.net/badge/whyd.svg)](https://cli.masoko.net/tools/whyd/)
 
 </div>
 
