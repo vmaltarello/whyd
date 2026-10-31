@@ -29,16 +29,25 @@ func NewRedactor(r *analyze.Result) *Redactor {
 	if h, err := os.Hostname(); err == nil {
 		hosts = append(hosts, h)
 	}
-	if name := os.Getenv("SUDO_USER"); name != "" {
-		users = append(users, name)
-	} else if u, err := user.Current(); err == nil {
-		users = append(users, u.Username)
+	if me := Me(); me != "" {
+		users = append(users, me)
 	}
 	if r != nil {
 		hosts = append(hosts, r.Host)
 		users = append(users, r.Users...)
 	}
 	return newRedactor(hosts, users)
+}
+
+// Me is the user running whyd: under sudo, the user who ran sudo, not root. Tests replace it.
+var Me = func() string {
+	if name := os.Getenv("SUDO_USER"); name != "" {
+		return name
+	}
+	if u, err := user.Current(); err == nil {
+		return u.Username
+	}
+	return ""
 }
 
 func newRedactor(hosts, users []string) *Redactor {

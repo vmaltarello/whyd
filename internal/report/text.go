@@ -20,7 +20,7 @@ func Text(w io.Writer, r *analyze.Result) error {
 	}
 
 	p("whyd: %s, %s (%s)\n\n", SessionName(r), Span(r), Length(r))
-	p("end     %s\n", r.Verdict.Summary)
+	p("end     %s\n", EndLine(r))
 	if q := QuietLine(r); q != "" {
 		p("        %s\n", q)
 	}
