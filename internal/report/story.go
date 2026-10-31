@@ -78,27 +78,24 @@ func Span(r *analyze.Result) string {
 	return When(r.Boot.First) + " to " + When(r.Boot.Last)
 }
 
-// By is who or what asked for the end, as the end line on screen says it: "with sudo reboot",
-// "by alex, with sudo reboot". The user is named only when it isn't the one running whyd, or the
-// session was recorded on another machine; the report never names them. "" if the journal
-// doesn't say.
-func By(r *analyze.Result) string {
-	by := r.Verdict.By
-	name := by != nil && by.User != "" && (r.Boot.ID == "" || by.User != Me())
-	return strings.TrimLeft(by.Words(name), ", ")
+// Words is what a request adds after a time on screen: " with sudo reboot", " by alex, with sudo
+// reboot". The user is named only when it isn't the one running whyd, or the session was recorded
+// on another machine; the report never names them.
+func Words(r *analyze.Result, q *analyze.Request) string {
+	return q.Words(q != nil && q.User != "" && (r.Boot.ID == "" || q.User != Me()))
 }
 
-// EndLine is the verdict's summary with By in place of the words that don't name the user.
+// By is who or what asked for the end, as a part of its own: "with sudo reboot", "by alex, with
+// sudo reboot". "" if the journal doesn't say.
+func By(r *analyze.Result) string { return strings.TrimLeft(Words(r, r.Verdict.By), ", ") }
+
+// EndLine is the verdict's summary with Words in place of the words that don't name the user.
 func EndLine(r *analyze.Result) string {
-	by := r.Verdict.By.Words(false)
-	if by == "" {
+	w := r.Verdict.By.Words(false)
+	if w == "" {
 		return r.Verdict.Summary
 	}
-	sep := " "
-	if strings.HasPrefix(by, ",") {
-		sep = ", "
-	}
-	return strings.TrimSuffix(r.Verdict.Summary, by) + sep + By(r)
+	return strings.Replace(r.Verdict.Summary, w, Words(r, r.Verdict.By), 1)
 }
 
 // Length is "17h22m", with the time asleep when there was any: "17h22m, 10h38m asleep".

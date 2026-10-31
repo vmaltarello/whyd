@@ -63,7 +63,10 @@ func shown(r *Result) string {
 	s := fmt.Sprintf("%v %s %q|%v|%d %d %v|%s %s %q|%d %d|%v|%+v|", r.Verdict.Kind, r.Verdict.Summary,
 		r.Verdict.By.Words(true), r.Quiet, r.Suspends, r.Hibernations, r.Asleep, r.Kernel, r.Host, r.Users,
 		r.UnknownErr, r.UnknownW, r.HiddenLines, r.OOM)
-	s += fmt.Sprintf("%+v|%v|", r.Boot, r.Sleeps)
+	s += fmt.Sprintf("%+v|", r.Boot)
+	for _, sl := range r.Sleeps {
+		s += fmt.Sprintf("%v %v %v %q|", sl.From, sl.To, sl.Hibernate, sl.By.Words(true))
+	}
 	for _, ev := range r.Events {
 		s += fmt.Sprintf("%s %q %d %v %v %v %d|", ev.Rule.ID, ev.Title, ev.Count, ev.First, ev.Last, ev.Fields, len(ev.Entries))
 		for _, e := range ev.Entries {

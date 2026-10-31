@@ -34,6 +34,7 @@ func (k EndKind) Clean() bool { return k == EndPowerOff || k == EndReboot || k =
 type Interval struct {
 	From, To  time.Time
 	Hibernate bool
+	By        *Request // who or what asked for the sleep, nil if the journal doesn't say
 }
 
 // Verdict is how the boot ended, with a one-line explanation.
@@ -55,6 +56,7 @@ type endState struct {
 	sleeping     bool   // a suspend or hibernation entry without its exit yet
 	hibernate    bool   // the open sleep is a hibernation
 	sleepStart   time.Time
+	sleepBy      *Request
 	suspends     int
 	hibernations int
 	asleep       time.Duration
@@ -80,16 +82,16 @@ func (s *endState) feed(e journal.Entry, line int) {
 			s.target = "shutdown"
 		}
 	case e.Kernel && strings.HasPrefix(e.Message, "PM: suspend entry"):
-		s.sleeping, s.hibernate, s.sleepStart = true, false, e.Time
+		s.sleeping, s.hibernate, s.sleepStart, s.sleepBy = true, false, e.Time, s.req.slept(e.Time)
 		s.suspends++
 	case e.Kernel && strings.HasPrefix(e.Message, "PM: hibernation: hibernation entry"):
-		s.sleeping, s.hibernate, s.sleepStart = true, true, e.Time
+		s.sleeping, s.hibernate, s.sleepStart, s.sleepBy = true, true, e.Time, s.req.slept(e.Time)
 		s.hibernations++
 	case e.Kernel && (strings.HasPrefix(e.Message, "PM: suspend exit") ||
 		strings.HasPrefix(e.Message, "PM: hibernation: hibernation exit")):
 		if s.sleeping {
 			s.asleep += e.Time.Sub(s.sleepStart)
-			s.sleeps = append(s.sleeps, Interval{s.sleepStart, e.Time, s.hibernate})
+			s.sleeps = append(s.sleeps, Interval{s.sleepStart, e.Time, s.hibernate, s.sleepBy})
 		}
 		s.sleeping = false
 	case e.Kernel && strings.HasPrefix(e.Message, "Kernel panic - not syncing: "):
@@ -116,15 +118,25 @@ func (s *endState) verdict(r *Result) Verdict {
 	case s.panic != "": // before "asleep": a panic while suspending or resuming is still a panic
 		return Verdict{EndPanic, "kernel panic: " + s.panic, nil}
 	case s.sleeping && s.hibernate:
-		return Verdict{EndAsleep, fmt.Sprintf("never woke up: hibernated at %s and never resumed",
-			s.sleepStart.Format("15:04")), nil}
+		return Verdict{EndAsleep, fmt.Sprintf("never woke up: hibernated at %s%s and never resumed",
+			s.sleepStart.Format("15:04"), s.sleepWords()), s.sleepBy}
 	case s.sleeping:
-		return Verdict{EndAsleep, fmt.Sprintf("never woke up: suspended at %s and never resumed",
-			s.sleepStart.Format("15:04")), nil}
+		return Verdict{EndAsleep, fmt.Sprintf("never woke up: suspended at %s%s and never resumed",
+			s.sleepStart.Format("15:04"), s.sleepWords()), s.sleepBy}
 	}
 	sum := "abrupt end, journal stops at " + end
 	if g := r.Gap(); g > 0 {
 		sum += ", next boot after " + Duration(g)
 	}
 	return Verdict{EndUnclean, sum, nil}
+}
+
+// sleepWords says who or what asked for the open sleep, with a comma after a comma before:
+// "suspended at 22:34, battery critical, and never resumed".
+func (s *endState) sleepWords() string {
+	w := s.sleepBy.Words(false)
+	if strings.HasPrefix(w, ",") {
+		w += ","
+	}
+	return w
 }

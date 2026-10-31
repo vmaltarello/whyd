@@ -172,7 +172,7 @@ func Run(in Input) (*Result, error) {
 	res.Events, res.Hidden = eng.Finish()
 	res.Suspends, res.Hibernations, res.Asleep, res.Sleeps = st.suspends, st.hibernations, st.asleep, st.sleeps
 	if st.sleeping {
-		res.Sleeps = append(res.Sleeps, Interval{st.sleepStart, end, st.hibernate})
+		res.Sleeps = append(res.Sleeps, Interval{st.sleepStart, end, st.hibernate, st.sleepBy})
 	}
 	res.Verdict = st.verdict(res)
 
