@@ -1,6 +1,7 @@
 package analyze
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -12,16 +13,21 @@ import (
 // runEnd analyses "source: message" lines one second apart from 18:00, ending with a power-off.
 func runEnd(t *testing.T, lines ...string) *Result {
 	t.Helper()
+	return runLog(t, append(lines, "systemd: Reached target System Power Off.", "systemd-journald: Journal stopped")...)
+}
+
+// runLog analyses "source: message" lines one second apart from 18:00.
+func runLog(t *testing.T, lines ...string) *Result {
+	t.Helper()
 	set, err := rules.LoadDefault()
 	if err != nil {
 		t.Fatal(err)
 	}
-	lines = append(lines, "systemd: Reached target System Power Off.", "systemd-journald: Journal stopped")
 	at := time.Date(2026, 10, 9, 18, 0, 0, 0, time.Local)
 	res, err := Run(Input{Rules: set, Read: func(fn func(journal.Entry) error) error {
 		for i, l := range lines {
 			src, msg, _ := strings.Cut(l, ": ")
-			if err := fn(journal.Entry{Time: at.Add(time.Duration(i) * time.Second), Priority: 6, Source: src, Message: msg}); err != nil {
+			if err := fn(journal.Entry{Time: at.Add(time.Duration(i) * time.Second), Priority: 6, Source: src, Kernel: src == "kernel", Message: msg}); err != nil {
 				return err
 			}
 		}
@@ -147,5 +153,65 @@ func TestRequests(t *testing.T) {
 		if want := "shut down at " + r.Boot.Last.Format("15:04:05") + r.Verdict.By.Words(false); r.Verdict.Summary != want {
 			t.Errorf("%s: summary %q, want %q", c.name, r.Verdict.Summary, want)
 		}
+	}
+}
+
+func TestSleepRequests(t *testing.T) {
+	cases := []struct {
+		name  string
+		lines []string
+		words string
+	}{
+		{"none", nil, ""},
+		{"lid", []string{"systemd-logind: Lid closed.", "systemd-logind: Suspending..."}, ", lid closed"},
+		{
+			"battery",
+			[]string{
+				"systemd-logind: suspend requested from client PID 9 ('upowerd') (unit upower.service)...",
+				"systemd-logind: The system will sleep now!",
+			},
+			", battery critical",
+		},
+		{
+			"systemctl",
+			[]string{
+				"systemd-logind: New session '3' of user 'alex' with class 'user' and type 'wayland'.",
+				"systemd-logind: suspend requested from client PID 9 ('systemctl') (unit session-3.scope)...",
+			},
+			" by alex, with systemctl suspend",
+		},
+		{
+			"lid while docked",
+			[]string{
+				"systemd-logind: Lid closed.", "systemd: a", "systemd: b", "systemd: c", "systemd: d",
+				"systemd: e", "systemd: f", "systemd-logind: Suspending...",
+			},
+			"",
+		},
+		{
+			"asked long before", append([]string{"systemd-logind: Lid closed.", "systemd-logind: Suspending..."},
+				slices.Repeat([]string{"systemd: a"}, 70)...),
+			"",
+		},
+	}
+	for _, c := range cases {
+		r := runLog(t, append(c.lines, "kernel: PM: suspend entry (s2idle)")...)
+		if len(r.Sleeps) != 1 {
+			t.Fatalf("%s: %d sleeps", c.name, len(r.Sleeps))
+		}
+		if got := r.Sleeps[0].By.Words(true); got != c.words {
+			t.Errorf("%s: %q, want %q", c.name, got, c.words)
+		}
+	}
+	r := runLog(t, "systemd-logind: suspend requested from client PID 9 ('upowerd') (unit upower.service)...",
+		"kernel: PM: suspend entry (s2idle)")
+	if want := "never woke up: suspended at 18:00, battery critical, and never resumed"; r.Verdict.Summary != want {
+		t.Errorf("verdict %q, want %q", r.Verdict.Summary, want)
+	}
+	// a sleep asked for and woken from doesn't stay for the next one
+	r = runLog(t, "systemd-logind: Lid closed.", "systemd-logind: Suspending...", "kernel: PM: suspend entry (s2idle)",
+		"kernel: PM: suspend exit", "kernel: PM: suspend entry (s2idle)")
+	if len(r.Sleeps) != 2 || r.Sleeps[0].By == nil || r.Sleeps[1].By != nil {
+		t.Errorf("sleeps %+v", r.Sleeps)
 	}
 }

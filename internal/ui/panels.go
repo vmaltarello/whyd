@@ -296,11 +296,19 @@ func verdictWords(r *analyze.Result) (head, why string) {
 		if len(r.Sleeps) > 0 && r.Sleeps[len(r.Sleeps)-1].Hibernate {
 			what = "hibernated"
 		}
-		at := r.Boot.Last
+		at, why := r.Boot.Last.Format("15:04"), "a flat battery or a failed resume"
 		if len(r.Sleeps) > 0 {
-			at = r.Sleeps[len(r.Sleeps)-1].From
+			sl := r.Sleeps[len(r.Sleeps)-1]
+			w := report.Words(r, sl.By)
+			if strings.HasPrefix(w, ",") {
+				w += "," // "at 22:34, lid closed, and never resumed"
+			}
+			at = sl.From.Format("15:04") + w
+			if sl.By != nil && sl.By.How == "battery critical" {
+				why = "the battery ran out"
+			}
 		}
-		return "Never woke up", fmt.Sprintf("It %s at %s and never resumed: a flat battery or a failed resume.", what, at.Format("15:04"))
+		return "Never woke up", fmt.Sprintf("It %s at %s and never resumed: %s.", what, at, why)
 	case analyze.EndPanic:
 		return "Kernel panic", "The kernel stopped on an error: " + strings.TrimPrefix(r.Verdict.Summary, "kernel panic: ")
 	default:
@@ -455,7 +463,7 @@ func (m *model) moments(r *analyze.Result) []moment {
 		if sl.Hibernate {
 			what = "hibernated"
 		}
-		out = append(out, moment{sl.From, what, stGray})
+		out = append(out, moment{sl.From, what + report.Words(r, sl.By), stGray})
 		if sl.To.Before(r.Boot.Last) || r.Verdict.Kind != analyze.EndAsleep {
 			out = append(out, moment{sl.To, "woke up after " + analyze.Duration(sl.To.Sub(sl.From)), stGray})
 		}
