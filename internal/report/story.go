@@ -78,6 +78,29 @@ func Span(r *analyze.Result) string {
 	return When(r.Boot.First) + " to " + When(r.Boot.Last)
 }
 
+// By is who or what asked for the end, as the end line on screen says it: "with sudo reboot",
+// "by alex, with sudo reboot". The user is named only when it isn't the one running whyd, or the
+// session was recorded on another machine; the report never names them. "" if the journal
+// doesn't say.
+func By(r *analyze.Result) string {
+	by := r.Verdict.By
+	name := by != nil && by.User != "" && (r.Boot.ID == "" || by.User != Me())
+	return strings.TrimLeft(by.Words(name), ", ")
+}
+
+// EndLine is the verdict's summary with By in place of the words that don't name the user.
+func EndLine(r *analyze.Result) string {
+	by := r.Verdict.By.Words(false)
+	if by == "" {
+		return r.Verdict.Summary
+	}
+	sep := " "
+	if strings.HasPrefix(by, ",") {
+		sep = ", "
+	}
+	return strings.TrimSuffix(r.Verdict.Summary, by) + sep + By(r)
+}
+
 // Length is "17h22m", with the time asleep when there was any: "17h22m, 10h38m asleep".
 func Length(r *analyze.Result) string {
 	s := analyze.Duration(r.Boot.Duration())

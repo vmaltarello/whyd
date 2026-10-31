@@ -232,9 +232,13 @@ func (r *tailRing) lines() []TailLine {
 
 // Needs is the part of a boot the analysis uses (see journal.Selection): warnings and errors,
 // every line of the programs the rules name (the kernel, systemd…), logins for the redaction,
-// and everything in the last TailKeep, where the verdict and the last minutes come from.
+// logind for who asked for a shutdown, and everything in the last TailKeep, where the verdict and
+// the last minutes come from.
 func Needs(set *rules.Set) *journal.Selection {
-	sel := &journal.Selection{Recent: TailKeep, Matches: []string{"SYSLOG_FACILITY=10"}} // authpriv: logins
+	sel := &journal.Selection{Recent: TailKeep, Matches: []string{
+		"SYSLOG_FACILITY=10", // authpriv: logins and sudo
+		"SYSLOG_IDENTIFIER=systemd-logind",
+	}}
 	for _, src := range set.Sources() {
 		sel.Matches = append(sel.Matches, "SYSLOG_IDENTIFIER="+src, "_COMM="+src)
 	}

@@ -340,6 +340,9 @@ func (m *model) facts(r *analyze.Result, w int) string {
 	switch k := r.Verdict.Kind; {
 	case k.Clean():
 		parts = append(parts, strings.SplitN(r.Verdict.Summary, " at ", 2)[0]+" at "+r.Boot.Last.Format("15:04"))
+		if by := report.By(r); by != "" {
+			parts = append(parts, by)
+		}
 	case r.Quiet > 0:
 		parts = append(parts, "nothing abnormal after "+r.Boot.Last.Add(-r.Quiet).Format("15:04"))
 	}

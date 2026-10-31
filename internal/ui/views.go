@@ -242,7 +242,7 @@ func (m *model) tailItems(res *analyze.Result) []item {
 	flush()
 	end := "the journal stops at " + res.Boot.Last.Format("15:04:05")
 	if res.Verdict.Kind.Clean() {
-		end = res.Verdict.Summary
+		end = report.EndLine(res)
 	}
 	if q := report.QuietLine(res); q != "" {
 		end += " · " + q

@@ -184,3 +184,30 @@ func TestWhenAcrossDST(t *testing.T) {
 		t.Errorf("got %q", got)
 	}
 }
+
+// The end line names who asked for the shutdown only when it isn't the one reading.
+func TestEndLineNames(t *testing.T) {
+	me := Me
+	Me = func() string { return "alex" }
+	defer func() { Me = me }()
+	by := &analyze.Request{How: "with sudo reboot", User: "alex"}
+	r := &analyze.Result{
+		Boot:    journal.Boot{ID: "b1"},
+		Verdict: analyze.Verdict{Kind: analyze.EndReboot, Summary: "restarted at 03:12:00 with sudo reboot", By: by},
+	}
+	if got := EndLine(r); got != "restarted at 03:12:00 with sudo reboot" {
+		t.Errorf("same user: %q", got)
+	}
+	by.User = "sam"
+	if got := EndLine(r); got != "restarted at 03:12:00 by sam, with sudo reboot" {
+		t.Errorf("another user: %q", got)
+	}
+	by.User, r.Boot.ID = "alex", "" // recorded on another machine: always named
+	if got := EndLine(r); got != "restarted at 03:12:00 by alex, with sudo reboot" {
+		t.Errorf("recorded: %q", got)
+	}
+	r.Verdict.By, r.Verdict.Summary = &analyze.Request{Scheduled: time.Date(2026, 10, 9, 18, 12, 0, 0, time.Local)}, "shut down at 18:22:00, scheduled at 18:12"
+	if got := EndLine(r); got != "shut down at 18:22:00, scheduled at 18:12" {
+		t.Errorf("scheduled: %q", got)
+	}
+}
