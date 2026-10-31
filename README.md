@@ -24,7 +24,9 @@ what went wrong before.
 Your laptop froze, you held the power button, it came back up. The answer is in the journal,
 buried under thousands of harmless lines. whyd finds it:
 
-- **how it ended**: clean power-off or reboot, hard power-off, died asleep, kernel panic
+- **how it ended**: clean power-off or reboot and who asked for it (`sudo reboot`, the login
+  screen, the power key), hard power-off, never woke up from sleep, kernel panic; and why each
+  sleep began (lid closed, battery critical)
 - **what went wrong before**: out-of-memory kills, GPU errors, crashes, failed services,
   hung tasks, overheating, disk errors, each with a short explanation
   ([the full list](docs/RULES.md#built-in-rules))
